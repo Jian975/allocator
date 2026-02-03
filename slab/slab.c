@@ -3,7 +3,7 @@
 #include "slab.h"
 
 //allocated a fixed size block
-void * my_malloc(slab_t * slab) {
+void * slab_malloc(slab_t * slab) {
     free_list_t * free_list = slab -> free_list;
     if (free_list == NULL) {
         printf("Out of memory");
@@ -11,12 +11,13 @@ void * my_malloc(slab_t * slab) {
     }
     free_list_t * next = free_list -> next;
     void * allocated = free_list -> data;
+    free(free_list);
     slab -> free_list = next;
     return allocated;
 }
 
 //prepend the pointer of the freed data to the start of the free list
-void my_free(slab_t * slab, void * data) {
+void slab_free(slab_t * slab, void * data) {
     free_list_t * free_list = slab -> free_list;
     free_list_t * freed = malloc(sizeof(free_list_t));
     freed -> data = data;
@@ -25,7 +26,7 @@ void my_free(slab_t * slab, void * data) {
 }
 
 //initiate a slab. This slab can only provide elements of size element_size
-slab_t * initiate(int element_size) {
+slab_t * initiate_slab(int element_size) {
     slab_t * slab = malloc(sizeof(slab_t));
 
     slab -> element_size = element_size;
@@ -54,15 +55,15 @@ slab_t * initiate(int element_size) {
 }
 
 int main() {
-    slab_t * slab = initiate(sizeof(int));
+    slab_t * slab = initiate_slab(sizeof(int));
 
-    int * a = my_malloc(slab);
+    int * a = slab_malloc(slab);
     *a = 10;
 
-    int * b = my_malloc(slab);
+    int * b = slab_malloc(slab);
     *b = 20;
     
-    int * c = my_malloc(slab);
+    int * c = slab_malloc(slab);
     if (c != NULL) {
         printf("ERROR: We should have been out of memory by now");
     }
@@ -70,18 +71,16 @@ int main() {
     printf("a = %d\n", *a);
     printf("b = %d\n", *b);
 
-    my_free(slab, a);
+    slab_free(slab, a);
 
-    int * d = my_malloc(slab);
+    int * d = slab_malloc(slab);
     *d = 30;
 
     printf("b = %d\n", *b);
     printf("d = %d\n", *d);
 
-    int * e = my_malloc(slab);
+    int * e = slab_malloc(slab);
     if (e != NULL) {
         printf("ERROR: We should have been out of memory by now");
     }
-
-
 }

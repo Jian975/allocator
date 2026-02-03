@@ -1,3 +1,5 @@
+#ifndef SLAB_H
+#define SLAB_H
 #define SLAB_SIZE 2
 
 typedef struct free_list{
@@ -19,4 +21,5 @@ void * my_malloc(slab_t * slab);
 void my_free(slab_t * slab, void * data);
 
 //initiates a slab of SLAB_SIZE elements with given element size
-slab_t * initiate(int element_size);
+slab_t * initiate_slab(int element_size);
+#endif
