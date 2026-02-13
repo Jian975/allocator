@@ -1,8 +1,9 @@
 #include<stdio.h>
-#define HEAP_SIZE 37
+#include<stdint.h>
+#define HEAP_SIZE 1024
 
 typedef struct node {
-    int size;
+    int16_t size;
     struct node * next;
 } node_t;
 

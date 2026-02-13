@@ -15,6 +15,19 @@ static int delta(int a, int b) {
     return difference;
 }
 
+//given that first node goes before next node
+//return 0 if the two nodes are not touching
+static int can_merge(node_t * first, node_t * next) {
+    return ((char*) (first + 1) + first -> size) == next;
+}
+
+//merges eaten into eater and returns pointer to eater
+static node_t * merge(node_t * eater, node_t * eaten) {
+    eater -> size += (eaten -> size + sizeof(node_t));
+    eater -> next = eaten -> next;
+    return eater;
+}
+
 void initialize_allocator() {
     node_t * new_free_list = (node_t *) heap;
     new_free_list -> size = HEAP_SIZE - sizeof(node_t);
@@ -82,8 +95,38 @@ void my_free(void * address) {
         initialize_allocator();
     } else {
         node_t * new_node = (node_t*) address - 1;
-        new_node -> next = free_list;
-        free_list = new_node;
+        node_t * current = free_list;
+        node_t * previous = NULL;
+        while (current != NULL) {
+            if (current > new_node) {
+                //freed block is first chunk in memory, with one or more following it
+                if (previous == NULL) {
+                    //merge freed block with next block if we can merge
+                    if (can_merge(new_node, current)) {
+                        new_node = merge(new_node, current);
+                        free_list = new_node;
+                    } else {
+                        //can't merge, just insert into linked list
+                        new_node -> next = current;
+                        free_list = new_node;
+                    }
+                    
+                } else {
+                    //freed block is not first chunk in memory
+                    previous -> next = new_node;
+                    new_node -> next = current -> next;
+                    if (can_merge(previous, new_node)) {
+                        merge(previous, new_node);
+                    }
+                    if (can_merge(new_node, current)) {
+                        merge(new_node, current);
+                    }
+                }
+                break;
+            }
+            previous = current;
+            current = current -> next;
+        }
     }
     is_empty = 0;
 }
@@ -112,17 +155,29 @@ int main() {
     print_free_list();
     printf("a = %d\n", *a);
 
-
-    //test free
-
-    printf("freeing a\n");
-    my_free(a);
-    print_free_list();
-
     //test second allocation
     printf("allocating for b\n");
     int * b = my_malloc(sizeof(int));
     *b = 5;
     print_free_list();
     printf("b = %d\n", *b);
+
+    //test second allocation
+    printf("allocating for c\n");
+    int * c = my_malloc(sizeof(int));
+    *c = 18;
+    print_free_list();
+    printf("c = %d\n", *c);
+
+    //test free
+    printf("freeing b\n");
+    my_free(b);
+    print_free_list();
+
+    //test second allocation
+    // printf("allocating for b\n");
+    // int * b = my_malloc(sizeof(int));
+    // *b = 5;
+    // print_free_list();
+    // printf("b = %d\n", *b);
 }
