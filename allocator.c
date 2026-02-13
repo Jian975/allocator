@@ -114,9 +114,9 @@ void my_free(void * address) {
                 } else {
                     //freed block is not first chunk in memory
                     previous -> next = new_node;
-                    new_node -> next = current -> next;
+                    new_node -> next = current;
                     if (can_merge(previous, new_node)) {
-                        merge(previous, new_node);
+                        new_node = merge(previous, new_node);
                     }
                     if (can_merge(new_node, current)) {
                         merge(new_node, current);
@@ -172,6 +172,11 @@ int main() {
     //test free
     printf("freeing b\n");
     my_free(b);
+    print_free_list();
+
+    //test free
+    printf("freeing c\n");
+    my_free(c);
     print_free_list();
 
     //test second allocation
