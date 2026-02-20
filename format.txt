@@ -1,0 +1,8 @@
+initialize 3	;initialize allocator to 3 bytes
+malloc a 10	    ;allocate 10 bytes and store it in a
+free a		    ;deallocate a
+print a		    ;print the contents of a. Only works when a stores an int
+print memory	;print a list of allocated and deallocated spaces
+set a 3		    ;a=3. Undefined behavior if a doesn’t have enough space. Only supports ints
+
+We only allow 5 variables a-e. This is statically set

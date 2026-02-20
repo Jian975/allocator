@@ -1,0 +1,8 @@
+initialize 1024
+print memory
+malloc a 4
+print memory
+set a 2
+print a
+free a
+print memory
