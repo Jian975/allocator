@@ -4,7 +4,7 @@
 #include "parser.h"
 #include "allocator.h"
 
-static void * variables[5];
+static void * variables[26];
 
 void parse_malloc(char * s) {
     strtok(s, " ");//discard "malloc" operator
@@ -21,7 +21,7 @@ void parse_malloc(char * s) {
 }
 
 void parse_free(char * s) {
-    strtok(s, " ");//discoard "free" operator
+    strtok(s, " ");//discard "free" operator
     char * name_string = strtok(NULL, " ");//name of variable to free
     char name = *name_string;
 
