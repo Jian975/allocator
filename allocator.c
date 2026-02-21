@@ -30,12 +30,14 @@ static node_t * merge(node_t * eater, node_t * eaten) {
 }
 
 void initialize_allocator(int new_heap_size) {
-    heap_size = new_heap_size;
+    heap_size = new_heap_size + (sizeof(node_t) * new_heap_size);
     if (heap == NULL) {
         heap = malloc(heap_size);
     }
+    printf("calculated heap size: %d\n", heap_size);
+    printf("sizeof(node_t) = %d\n", sizeof(node_t));
     node_t * new_free_list = (node_t *) heap;
-    new_free_list -> size = heap_size - sizeof(node_t);
+    new_free_list -> size = heap_size;
     new_free_list -> next = NULL;
     free_list = new_free_list;
 }
@@ -149,45 +151,66 @@ void print_free_list() {
     printf("\n");
 }
 
-// int main() {
-//     initialize_allocator(1024);
-//     print_free_list();
+void print_memory() {
+    node_t * current_free = free_list;
+    node_t * current = (node_t *) heap;
+    int counter = 0;
+    while (current < heap + heap_size) {
+        size_t relative_address = ((uintptr_t) current) - (uintptr_t) heap;
+        relative_address -= (counter * sizeof(node_t));
+        if (current == current_free) {
+            printf("[status=free, size=%d, address=%zu]\n", current -> size, relative_address);
+        } else {
+            printf("[status=allocated, size=%d, address=%zu]\n", current -> size, relative_address);
+        }
+        //update current to next memory slot
+        current = (char *) current + sizeof(node_t) + current -> size;
+        while (current_free != NULL && current > current_free) {
+            current_free = current_free -> next;
+        }
+        counter++;
+    }
+}
 
-//     //test simple allocation
-//     printf("allocating for a\n");
-//     int * a = my_malloc(sizeof(int));
-//     *a = 3;
-//     print_free_list();
-//     printf("a = %d\n", *a);
+int main() {
+    initialize_allocator(1024);
+    print_memory();
 
-//     //test second allocation
-//     printf("allocating for b\n");
-//     int * b = my_malloc(sizeof(int));
-//     *b = 5;
-//     print_free_list();
-//     printf("b = %d\n", *b);
+    //test simple allocation
+    printf("allocating for a\n");
+    int * a = my_malloc(sizeof(int));
+    *a = 3;
+    print_memory();
+    printf("a = %d\n", *a);
 
-//     //test second allocation
-//     printf("allocating for c\n");
-//     int * c = my_malloc(sizeof(int));
-//     *c = 18;
-//     print_free_list();
-//     printf("c = %d\n", *c);
+    //test second allocation
+    printf("allocating for b\n");
+    int * b = my_malloc(sizeof(int));
+    *b = 5;
+    print_memory();
+    printf("b = %d\n", *b);
 
-//     //test free
-//     printf("freeing b\n");
-//     my_free(b);
-//     print_free_list();
+    //test second allocation
+    printf("allocating for c\n");
+    int * c = my_malloc(sizeof(int));
+    *c = 18;
+    print_memory();
+    printf("c = %d\n", *c);
 
-//     //test free
-//     printf("freeing c\n");
-//     my_free(c);
-//     print_free_list();
+    //test free
+    printf("freeing b\n");
+    my_free(b);
+    print_memory();
 
-//     //test second allocation
-//     // printf("allocating for b\n");
-//     // int * b = my_malloc(sizeof(int));
-//     // *b = 5;
-//     // print_free_list();
-//     // printf("b = %d\n", *b);
-// }
+    //test free
+    printf("freeing c\n");
+    my_free(c);
+    print_memory();
+
+    //test second allocation
+    // printf("allocating for b\n");
+    // int * b = my_malloc(sizeof(int));
+    // *b = 5;
+    // print_free_list();
+    // printf("b = %d\n", *b);
+}
