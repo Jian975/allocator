@@ -2,13 +2,10 @@
 #include<stdint.h>
 #ifndef ALLOCATOR_H
 #define ALLOCATOR_H
-#define METADATA_SIZE 51
 
 typedef struct node {
     int16_t size;
-    int8_t allocated;
-    int8_t next_free;
-    void * address;
+    struct node * next;
 } node_t;
 
 void initialize_allocator(int heap_size);
@@ -17,5 +14,5 @@ void * my_malloc(int size);
 
 void my_free(void * address);
 
-void print_memory();
+void print_free_list();
 #endif
