@@ -7,10 +7,8 @@
 static void * variables[26];
 
 void parse_malloc(char * s) {
-    strtok(s, " ");//discard "malloc" operator
-    char * name_string = strtok(NULL, " ");//variable name
-    char * size_string = strtok(NULL, " ");//size
-    char name = *name_string;
+    char name = s[2];
+    char * size_string = s + 4;
     int size = atoi(size_string);
 
     printf("%c = malloc(%d)\n", name, size);
@@ -21,9 +19,7 @@ void parse_malloc(char * s) {
 }
 
 void parse_free(char * s) {
-    strtok(s, " ");//discard "free" operator
-    char * name_string = strtok(NULL, " ");//name of variable to free
-    char name = *name_string;
+    char name = s[2];
 
     int index = name - 'a';
     void * allocated = variables[index];
@@ -32,63 +28,52 @@ void parse_free(char * s) {
 }
 
 void parse_set(char * s) {
-    strtok(s, " ");//discard "set" operator
-    char * name_string = strtok(NULL, " ");//name of variable to set
-    char * value_string = strtok(NULL, " ");//value to set variable to
+    char name = s[2];
+    char * value_string = s + 4;
     int value = atoi(value_string);
-    char name = *name_string;
 
     int index = name - 'a';
-    printf("%c = %d\n", name, value);
+    printf("Setting %c = %d\n", name, value);
     *((int *)variables[index]) = value;
 }
 
 void parse_print(char * s) {
-    strtok(s, " ");//discard "print" operator
-    char * operand = strtok(NULL, " ");//either variable name of memory
-    if (strlen(operand) == 2) {//variable name + \n
-        //variable name case
-        char variable = *operand;
-        int index = variable - 'a';
-        if (variables[index] == NULL) {
-            printf("NULL Pointer\n");
-        } else {
-            int value = *((int *)variables[index]);
-            printf("%c == %d\n", variable, value);
-        }
-    } else {
-        //print memory case
-        print_free_list();
-    }
+    print_memory();
 }
 
 void parse_initialize(char * s) {
-    strtok(s, " ");//discard "initialize" operator
-    char * size_string = strtok(NULL, " ");
-    int size = atoi(size_string);
+    int size = atoi(s);
     printf("Initializing allocator with %d bytes\n", size);
     initialize_allocator(size);
 }
 
+void parse_get(char * s) {
+    char name = s[2];
+    int index = name - 'a';
+    printf("Value of %c: %d\n", name, *((int *)variables[index]));
+}
+
 void parse() {
     char buffer[50];
+    fgets(buffer, sizeof(buffer), stdin);
+    parse_initialize(buffer);
     while (fgets(buffer, sizeof(buffer), stdin) != NULL) {
-        if (strncmp("malloc", buffer, 6) == 0) {
+        if (buffer[0] == 'm') {
             parse_malloc(buffer);
-        } else if (strncmp("free", buffer, 4) == 0) {
+        } else if (buffer[0] == 'f') {
             parse_free(buffer);
-        } else if (strncmp("print", buffer, 5) == 0) {
+        } else if (buffer[0] == 'p') {
             parse_print(buffer);
-        } else if (strncmp("set", buffer, 3) == 0) {
+        } else if (buffer[0] == 's') {
             parse_set(buffer);
-        } else if (strncmp("initialize", buffer, 10) == 0) {
-            parse_initialize(buffer);
+        } else if (buffer[0] == 'g') {
+            parse_get(buffer);
         } else {
             printf("Unknown command: %s\n", buffer);
         }
     }
 }
 
-// int main() {
-//     parse();
-// }
+int main() {
+    parse();
+}
