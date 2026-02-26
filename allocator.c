@@ -6,9 +6,6 @@ static char * heap = NULL;
 static node_t metadata[METADATA_SIZE];
 static int metadata_size = 1;
 static int heap_size = 0;
-static int8_t free_list = -1;
-//if free list is empty
-static int is_empty = 0;
 
 static int delta(int a, int b) {
     int difference = a - b;
@@ -28,7 +25,6 @@ static int minimum(int a, int b) {
 //shift all values to the right of i (excluding i) by 1 to the right
 static void shift_right(int i) {
     for (int j = metadata_size; j > i + 1; j--) {
-	metadata[j].next_free += 1;
         metadata[j] = metadata[j - 1];
     }
 }
@@ -44,7 +40,6 @@ static int find(void * address) {
 //shift all values to the right of i (excluding i) by 1
 static void shift_left(int i) {
     for (int j = i + 1; j < metadata_size - 1; j++) {
-	metadata[j].next_free -=1;
         metadata[j] = metadata[j + 1];
     }
 }
@@ -55,32 +50,25 @@ void initialize_allocator(int new_heap_size) {
         heap = malloc(heap_size);
     }
     metadata[0].allocated = 0;
-    metadata[0].next_free = -1;
     metadata[0].size = heap_size;
     metadata[0].address = heap;
-    free_list = 0;
 }
 
 
 void * my_malloc(int size) {
-    if (is_empty) {
-        return NULL;
-    }
     //best fit
-    int8_t current = free_list;
-    int8_t previous = -1;
+    int8_t current = 0;
     int smallest_delta = -1;
     int8_t best_fit = -1;
-    int8_t before_best_fit = -1;//keep track for splitting memory chunks
-    while (current != -1) {
+    while (current < metadata_size) {
         int current_delta = delta(metadata[current].size, size);
-        if (metadata[current].size >= size && (smallest_delta == -1 || current_delta < smallest_delta)) {
+        if (metadata[current].allocated == 0 &&
+            metadata[current].size >= size && 
+            (smallest_delta == -1 || current_delta < smallest_delta)) {
             smallest_delta = current_delta;
             best_fit = current;
-            before_best_fit = previous;
         }
-        previous = current;
-        current = metadata[current].next_free;
+        current += 1;
     }
 
     //out of memory
@@ -93,28 +81,10 @@ void * my_malloc(int size) {
         shift_right(best_fit);
         metadata_size++;
         node_t * new_node = &metadata[best_fit + 1];
-        new_node -> next_free = metadata[best_fit].next_free;
         new_node -> allocated = 0;
         new_node -> address = (char *) metadata[best_fit].address + size;
         new_node -> size = delta(metadata[best_fit].size, size);
-        if (best_fit + 2 == metadata_size) {
-            new_node -> next_free = -1;
-        }
-        if (before_best_fit != -1) {
-            metadata[before_best_fit].next_free = best_fit + 1;
-        } else{//no previous means we removed first node
-            free_list = best_fit + 1;
-        }
         metadata[best_fit].size = size;
-    } else {
-        if (before_best_fit != -1) {
-            metadata[before_best_fit].next_free = metadata[best_fit].next_free;
-            metadata[best_fit].size = size;
-        } else {
-            //We removed the only entry and we didn't split any memory chunks
-            //free list is now empty
-            is_empty = 1;
-        }
     }
 
     metadata[best_fit].allocated = 1;
@@ -123,75 +93,63 @@ void * my_malloc(int size) {
 
 void * my_realloc(void * ptr, size_t size) {
     char * address = my_malloc(size);
-  if (address == NULL) {
-    return NULL;
-  }
-  if (ptr == NULL) {
-	  return address;
-  }
-  if (size == 0) {
-	  my_free(ptr);
-	  return NULL;
-  }
-  char * address_start = address;
-  node_t * metadata = (node_t * ) ((char *) ptr - sizeof(node_t));
-  char * char_ptr = (char *) ptr;
-  for (int i = 0; i < minimum(metadata -> size, size); i++) {
-    *address = *char_ptr;
-    address++;
-    char_ptr++;
-  }
-  my_free(ptr);
-  return address_start;
+    if (address == NULL) {
+        return NULL;
+    }
+    if (ptr == NULL) {
+        return address;
+    }
+    if (size == 0) {
+        my_free(ptr);
+        return NULL;
+    }
+    char * address_start = address;
+    node_t * metadata = (node_t * ) ((char *) ptr - sizeof(node_t));
+    char * char_ptr = (char *) ptr;
+    for (int i = 0; i < minimum(metadata -> size, size); i++) {
+        *address = *char_ptr;
+        address++;
+        char_ptr++;
+    }
+    my_free(ptr);
+    return address_start;
 }
 
 static void *my_calloc(size_t nmemb, size_t size) {
-  char * ptr = my_malloc(nmemb * size);
-  for (size_t i = 0; i < (nmemb * size); i++) {
-    *ptr = '\0';
-    ptr++;
-  }
-  return ptr;
+    char * ptr = my_malloc(nmemb * size);
+    for (size_t i = 0; i < (nmemb * size); i++) {
+        *ptr = '\0';
+        ptr++;
+    }
+    return ptr;
 }
 
 void my_free(void * address) {
     if (address == NULL) {
         return;
     }
-    if (is_empty) {
+    if (metadata_size == 1) {
         initialize_allocator(heap_size);
-    } else {
-        int8_t last_free = -1;
-        for (int i = 0; i < metadata_size; i++) {
-            if (metadata[i].allocated == 0) {
-                last_free = i;
-            }
-            if (metadata[i].address == address) {
-                metadata[i].allocated = 0;
-                if (i > 1 && metadata[i - 1].allocated == 0) {
-                    metadata[i - 1].size += metadata[i].size;
-                    metadata[i - 1].next_free = metadata[i].next_free;
-                    shift_left(i - 1);
-                    metadata_size--;
-                    i--;
-                }
-                if (metadata[i + 1].allocated == 0) {
-                    metadata[i].size += metadata[i + 1].size;
-                    metadata[i].next_free = metadata[i + 1].next_free;
-                    if (last_free == i + 1) {
-                        metadata[last_free].next_free = i;
-                    }
-                    shift_left(i);
-                    metadata_size--;
-                    if (free_list == i + 1) {
-                        free_list = i;
-                    }
-                    break;
-                }
-            }
-        }
+        return;
     }
-    is_empty = 0;
+    int8_t freed = find(address);
+    if (freed == -1) {
+        printf("Error: Can't find address to free\n");
+        return;
+    }
+    metadata[freed].allocated = 0;
+    //if the block after this is free, coalesce
+    if (freed < metadata_size - 1 && metadata[freed + 1].allocated == 0) {
+        metadata[freed].size += metadata[freed + 1].size;
+        shift_left(freed);
+        metadata_size--;
+    }
+    //if the block before this is free, coalesce
+    if (freed > 0 && metadata[freed - 1].allocated == 0) {
+        metadata[freed - 1].size += metadata[freed].size;
+        shift_left(freed - 1);
+        metadata_size--;
+    }
 }
 
 void print_memory() {

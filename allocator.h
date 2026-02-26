@@ -7,7 +7,6 @@
 typedef struct node {
     int16_t size;
     int8_t allocated;
-    int8_t next_free;
     void * address;
 } node_t;
 
