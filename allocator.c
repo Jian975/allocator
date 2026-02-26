@@ -70,12 +70,10 @@ void * my_malloc(int size) {
         }
         current += 1;
     }
-
     //out of memory
     if (best_fit == -1) {
         return NULL;
     }
-
     //split memory block if necessary
     if (metadata[best_fit].size > size) {
         shift_right(best_fit);
@@ -86,7 +84,6 @@ void * my_malloc(int size) {
         new_node -> size = delta(metadata[best_fit].size, size);
         metadata[best_fit].size = size;
     }
-
     metadata[best_fit].allocated = 1;
     return metadata[best_fit].address;
 }
