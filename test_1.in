@@ -1,8 +1,28 @@
 1024
 p
-m a 4
+m a 128
 p
-s a 2
-g a
 f a
+p
+m b 128
+p
+f b
+p
+m c 128
+p
+f c
+p
+m d 128
+p
+f d
+p
+m e 128
+p
+m f 128
+p
+f f
+p
+m g 128
+p
+f g
 p

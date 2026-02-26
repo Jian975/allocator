@@ -18,9 +18,17 @@ static int delta(int a, int b) {
     return difference;
 }
 
+static int minimum(int a, int b) {
+    if (a < b) {
+        return a;
+    }
+    return b;
+}
+
 //shift all values to the right of i (excluding i) by 1 to the right
 static void shift_right(int i) {
     for (int j = metadata_size; j > i + 1; j--) {
+	metadata[j].next_free += 1;
         metadata[j] = metadata[j - 1];
     }
 }
@@ -36,6 +44,7 @@ static int find(void * address) {
 //shift all values to the right of i (excluding i) by 1
 static void shift_left(int i) {
     for (int j = i + 1; j < metadata_size - 1; j++) {
+	metadata[j].next_free -=1;
         metadata[j] = metadata[j + 1];
     }
 }
@@ -112,6 +121,39 @@ void * my_malloc(int size) {
     return metadata[best_fit].address;
 }
 
+void * my_realloc(void * ptr, size_t size) {
+    char * address = my_malloc(size);
+  if (address == NULL) {
+    return NULL;
+  }
+  if (ptr == NULL) {
+	  return address;
+  }
+  if (size == 0) {
+	  my_free(ptr);
+	  return NULL;
+  }
+  char * address_start = address;
+  node_t * metadata = (node_t * ) ((char *) ptr - sizeof(node_t));
+  char * char_ptr = (char *) ptr;
+  for (int i = 0; i < minimum(metadata -> size, size); i++) {
+    *address = *char_ptr;
+    address++;
+    char_ptr++;
+  }
+  my_free(ptr);
+  return address_start;
+}
+
+static void *my_calloc(size_t nmemb, size_t size) {
+  char * ptr = my_malloc(nmemb * size);
+  for (size_t i = 0; i < (nmemb * size); i++) {
+    *ptr = '\0';
+    ptr++;
+  }
+  return ptr;
+}
+
 void my_free(void * address) {
     if (address == NULL) {
         return;
@@ -141,6 +183,9 @@ void my_free(void * address) {
                     }
                     shift_left(i);
                     metadata_size--;
+                    if (free_list == i + 1) {
+                        free_list = i;
+                    }
                     break;
                 }
             }
@@ -155,47 +200,56 @@ void print_memory() {
         printf("[size=%d, allocated=%d, address=%p]\n", 
             metadata[i].size, metadata[i].allocated, relative_address);
     }
+    printf("\n");
 }
 
 // int main() {
 //     initialize_allocator(1024);
 //     print_memory();
 
-//     //test simple allocation
-//     printf("allocating for a\n");
-//     int * a = my_malloc(sizeof(int));
-//     *a = 3;
-//     print_memory();
-//     printf("a = %d\n", *a);
-
-//     //test second allocation
-//     printf("allocating for b\n");
-//     int * b = my_malloc(sizeof(int));
-//     *b = 5;
-//     print_memory();
-//     printf("b = %d\n", *b);
-
-//     //test second allocation
-//     printf("allocating for c\n");
-//     int * c = my_malloc(sizeof(int));
-//     *c = 18;
-//     print_memory();
-//     printf("c = %d\n", *c);
-
-//     //test free
-//     printf("freeing b\n");
-//     my_free(b);
-//     print_memory();
-
-//     //test free
-//     printf("freeing c\n");
+//     void * c = my_malloc(SIZE_MAX);
 //     my_free(c);
 //     print_memory();
+//     int * a = my_malloc(sizeof(int));
+//     print_memory();
+//     int * b = my_realloc(a, 5);
+//     print_memory();
 
-//     //test second allocation
-//     // printf("allocating for b\n");
-//     // int * b = my_malloc(sizeof(int));
-//     // *b = 5;
-//     // print_free_list();
-//     // printf("b = %d\n", *b);
+    // //test simple allocation
+    // printf("allocating for a\n");
+    // int * a = my_malloc(sizeof(int));
+    // *a = 3;
+    // print_memory();
+    // printf("a = %d\n", *a);
+
+    // //test second allocation
+    // printf("allocating for b\n");
+    // int * b = my_malloc(sizeof(int));
+    // *b = 5;
+    // print_memory();
+    // printf("b = %d\n", *b);
+
+    // //test second allocation
+    // printf("allocating for c\n");
+    // int * c = my_malloc(sizeof(int));
+    // *c = 18;
+    // print_memory();
+    // printf("c = %d\n", *c);
+
+    // //test free
+    // printf("freeing b\n");
+    // my_free(b);
+    // print_memory();
+
+    // //test free
+    // printf("freeing c\n");
+    // my_free(c);
+    // print_memory();
+
+    //test second allocation
+    // printf("allocating for b\n");
+    // int * b = my_malloc(sizeof(int));
+    // *b = 5;
+    // print_free_list();
+    // printf("b = %d\n", *b);
 // }
