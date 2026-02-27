@@ -56,6 +56,9 @@ void initialize_allocator(int new_heap_size) {
 
 
 void * my_malloc(int size) {
+    if (size % 4 != 0) {
+        size += (4 - (size % 4));
+    }
     //best fit
     int8_t current = 0;
     int smallest_delta = -1;
