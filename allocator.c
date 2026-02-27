@@ -125,14 +125,15 @@ void my_free(void * address) {
     if (address == NULL) {
         return;
     }
-    if (metadata_size == 1) {
-        initialize_allocator(heap_size);
-        return;
-    }
     int8_t freed = find(address);
     if (freed == -1) {
         printf("Error: Can't find address to free\n");
         return;
+    }
+    char * char_address = address;
+    for (int i = 0; i < metadata[freed].size; i++) {
+        *char_address = '\0';
+        char_address++;
     }
     metadata[freed].allocated = 0;
     //if the block after this is free, coalesce
