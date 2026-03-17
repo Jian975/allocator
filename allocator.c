@@ -45,6 +45,10 @@ static void shift_left(int i) {
 }
 
 void initialize_allocator(int new_heap_size) {
+    if (new_heap_size < 4 || new_heap_size > 1000) {
+        printf("Invalid arena size, allocator terminating.\n");
+        exit(0);
+    }
     heap_size = new_heap_size;
     if (heap == NULL) {
         heap = malloc(heap_size);
@@ -159,7 +163,6 @@ void print_memory() {
         printf("[size=%d, allocated=%d, address=%p]\n", 
             metadata[i].size, metadata[i].allocated, relative_address);
     }
-    printf("\n");
 }
 
 // int main() {

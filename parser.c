@@ -43,8 +43,8 @@ void parse_print(char * s) {
 
 void parse_initialize(char * s) {
     int size = atoi(s);
-    printf("Initializing allocator with %d bytes\n", size);
     initialize_allocator(size);
+    printf("Initializing allocator with %d bytes\n", size);
 }
 
 void parse_get(char * s) {

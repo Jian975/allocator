@@ -1,0 +1,6 @@
+Initializing allocator with 512 bytes
+a = malloc(4)
+[size=4, allocated=1, address=0000000000000000]
+[size=508, allocated=0, address=0000000000000004]
+free(a)
+[size=512, allocated=0, address=0000000000000000]

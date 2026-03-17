@@ -1,0 +1,3 @@
+Initializing allocator with 10 bytes
+a = malloc(100)
+[size=10, allocated=0, address=0000000000000000]

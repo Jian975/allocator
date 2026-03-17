@@ -1,0 +1,4 @@
+Initializing allocator with 512 bytes
+a = malloc(7)
+[size=8, allocated=1, address=0000000000000000]
+[size=504, allocated=0, address=0000000000000008]

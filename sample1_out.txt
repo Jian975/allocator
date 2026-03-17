@@ -1,0 +1,2 @@
+Initializing allocator with 512 bytes
+[size=512, allocated=0, address=0000000000000000]

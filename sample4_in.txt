@@ -1,0 +1,9 @@
+512
+m a 4
+m b 4
+m c 4
+p
+f b
+p
+f c
+p
