@@ -33,7 +33,7 @@ void parse_set(char * s) {
     int value = atoi(value_string);
 
     int index = name - 'a';
-    printf("Setting %c = %d\n", name, value);
+    printf("%c = %d\n", name, value);
     *((int *)variables[index]) = value;
 }
 
@@ -50,7 +50,7 @@ void parse_initialize(char * s) {
 void parse_get(char * s) {
     char name = s[2];
     int index = name - 'a';
-    printf("Value of %c: %d\n", name, *((int *)variables[index]));
+    printf("%c == %d\n", name, *((int *)variables[index]));
 }
 
 void parse() {
