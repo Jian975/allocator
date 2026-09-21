@@ -1,0 +1,1385 @@
+   1 0000               #Author: Xuejian Sundvall
+   2 0000               PRINT_STRING = 4
+   3 0000               PRINT_INT = 1
+   4 0000               PRINT_CHAR = 11
+   5 0000               READ_STRING = 8
+   6 0000               METADATA_SIZE = 51
+   7 0000               NODE_SIZE = 12
+   8 0000               MIN_HEAP_SIZE = 4
+   9 0000               MAX_HEAP_SIZE = 1000
+  10 0000               EXIT = 10
+  11 0000               
+  12 0000                       .data
+  13 0000                       .align  2
+  14 0000               newline:
+  15 0000 0A00    	        .asciiz "\n"
+  16 0002               init_message_front:
+  17 0002 496E6974	        .asciiz "Initializing allocator with "
+          69616C69
+          7A696E67
+          20616C6C
+          6F636174
+          6F722077
+  18 001f               init_message_back:
+  19 001f 20627974	        .asciiz " bytes.\n"
+          65732E0A
+          00      
+  20 0028               left_parentheses:
+  21 0028 2800    	        .asciiz "("
+  22 002a               right_parentheses:
+  23 002a 2900    	        .asciiz ")"
+  24 002c               malloc_message_middle:
+  25 002c 203D206D	        .asciiz " = malloc("
+          616C6C6F
+          632800  
+  26 0037               free_message_front:
+  27 0037 66726565	        .asciiz "free("
+          2800    
+  28 003d               double_equals:
+  29 003d 203D3D20	        .asciiz " == "
+          00      
+  30 0042               equals:
+  31 0042 203D2000	        .asciiz " = "
+  32 0046               size_msg:
+  33 0046 5B73697A	        .asciiz "[size="
+          653D00  
+  34 004d               allocated_msg:
+  35 004d 2C20616C	        .asciiz ", allocated="
+          6C6F6361
+          7465643D
+          00      
+  36 005a               address_msg:
+  37 005a 2C206164	        .asciiz ", address="
+          64726573
+          733D00  
+  38 0065               end_bracket:
+  39 0065 5D0A00  	        .asciiz "]\n"
+  40 0068               invalid_arena_msg:
+  41 0068 496E7661	        .asciiz "Invalid arena size, allocator terminating.\n"
+          6C696420
+          6172656E
+          61207369
+          7A652C20
+          616C6C6F
+  42 0094               bad_free_msg:
+  43 0094 46726565	        .asciiz "Freeing memory not from malloc\n"
+          696E6720
+          6D656D6F
+          7279206E
+          6F742066
+          726F6D20
+  44 00b4               no_memory_msg:
+  45 00b4 4F757420	        .asciiz "Out of Memory\n"
+          6F66204D
+          656D6F72
+          790A00  
+  46 00c3 00000000	        .align  4
+          00000000
+          00000000
+          00      
+  47 00d0               heap:
+  48 00d0 00000000	        .space  1000
+          00000000
+          00000000
+          00000000
+          00000000
+          00000000
+  49 04b8               metadata:
+  50 04b8 00000000	        .space  METADATA_SIZE * NODE_SIZE
+          00000000
+          00000000
+          00000000
+          00000000
+          00000000
+  51 071c               metadata_size:
+  52 071c 00000001	        .word   1
+  53 0720               heap_size:
+  54 0720 00000000	        .word   0
+  55 0724               variables:
+  56 0724 00000000	        .space  26 * 4
+          00000000
+          00000000
+          00000000
+          00000000
+          00000000
+  57 078c               buffer:
+  58 078c 00000000	        .space  128
+          00000000
+          00000000
+          00000000
+          00000000
+          00000000
+  59 080c               
+  60 0000                       .text
+  61 0000                       .align  2
+  62 0000               
+  63 0000                       .globl  main
+  64 0000               
+  65 0000               main:
+  66 0000 23BDFFE8	        addi    $sp, $sp, -24
+  67 0004 AFBF0014	        sw      $ra, 20($sp)
+  68 0008 AFB00010	        sw      $s0, 16($sp)
+  69 000c AFB1000C	        sw      $s1, 12($sp)
+  70 0010 AFB20008	        sw      $s2, 8($sp)
+  71 0014 AFB30004	        sw      $s3, 4($sp)
+  72 0018 AFB40000	        sw      $s4, 0($sp)
+  73 001c               
+  74 001c 0C0001BE	        jal     read
+  75 0020               
+  76 0020 08000330	        j       done
+  77 0024                
+  78 0024               
+  79 0024               #a0 - address to find
+  80 0024               #v0 - metadata chunk associated with that address, -1 if not found
+  81 0024               find:
+  82 0024 23BDFFE8	        addi    $sp, $sp, -24
+  83 0028 AFBF0014	        sw      $ra, 20($sp)
+  84 002c AFB00010	        sw      $s0, 16($sp)
+  85 0030 AFB1000C	        sw      $s1, 12($sp)
+  86 0034 AFB20008	        sw      $s2, 8($sp)
+  87 0038 AFB30004	        sw      $s3, 4($sp)
+  88 003c AFB40000	        sw      $s4, 0($sp)
+  89 0040               
+  90 0040 00808021	        move    $s0, $a0                #s0 is the target address
+  91 0044 34110000	        li      $s1, 0                  #s1 is the index
+  92 0048 3C120000	        la      $s2, metadata_size
+     004c 36520000
+  93 0050 8E520000	        lw      $s2, 0($s2)             #s2 is the list size
+  94 0054               
+  95 0054               find_loop:
+  96 0054 0232402A	        slt     $t0, $s1, $s2
+  97 0058 1100000C	        beq     $t0, $zero, not_found
+  98 005c               
+  99 005c                       #load metadata chunk
+ 100 005c 3408000C	        li      $t0, NODE_SIZE
+ 101 0060 01110018	        mul     $t0, $t0, $s1
+     0064 00004012
+ 102 0068 3C090000	        la      $t1, metadata
+     006c 35290000
+ 103 0070 01099820	        add     $s3, $t0, $t1           #s3 is current metadata chunk
+ 104 0074                       
+ 105 0074                       #chunk address
+ 106 0074 8E680008	        lw      $t0, 8($s3)
+ 107 0078 11100002	        beq     $t0, $s0, found
+ 108 007c                       
+ 109 007c 22310001	        addi    $s1, $s1, 1
+ 110 0080 08000015	        j       find_loop
+ 111 0084               
+ 112 0084               found:
+ 113 0084 02601021	        move    $v0, $s3
+ 114 0088 08000025	        j       find_done
+ 115 008c               
+ 116 008c               not_found:
+ 117 008c 2402FFFF	        li      $v0, -1
+ 118 0090 08000025	        j       find_done
+ 119 0094               
+ 120 0094               find_done:
+ 121 0094 8FB30004	        lw      $s3, 4($sp)
+ 122 0098 8FB20008	        lw      $s2, 8($sp)
+ 123 009c 8FB1000C	        lw      $s1, 12($sp)
+ 124 00a0 8FB00010	        lw      $s0, 16($sp)
+ 125 00a4 8FBF0014	        lw      $ra, 20($sp)
+ 126 00a8 23BD0018	        addi    $sp, $sp, 24
+ 127 00ac 03E00008	        jr      $ra
+ 128 00b0               
+ 129 00b0               
+ 130 00b0               #a0 - memory to free
+ 131 00b0               free:
+ 132 00b0 23BDFFE8	        addi    $sp, $sp, -24
+ 133 00b4 AFBF0014	        sw      $ra, 20($sp)
+ 134 00b8 AFB00010	        sw      $s0, 16($sp)
+ 135 00bc AFB1000C	        sw      $s1, 12($sp)
+ 136 00c0 AFB20008	        sw      $s2, 8($sp)
+ 137 00c4 AFB30004	        sw      $s3, 4($sp)
+ 138 00c8 AFB40000	        sw      $s4, 0($sp)
+ 139 00cc               
+ 140 00cc 00808021	        move    $s0, $a0                #s0 contains address to free
+ 141 00d0 1200003F	        beq     $s0, $zero, bad_free
+ 142 00d4               
+ 143 00d4 02002021	        move    $a0, $s0
+ 144 00d8 0C000009	        jal     find
+ 145 00dc 00408821	        move    $s1, $v0                #s1 is the metadata chunk
+ 146 00e0               
+ 147 00e0 2409FFFF	        li      $t1, -1
+ 148 00e4 1229003A	        beq     $s1, $t1, bad_free
+ 149 00e8               
+ 150 00e8                       #free this chunk
+ 151 00e8 AE200004	        sw      $zero, 4($s1)
+ 152 00ec               
+ 153 00ec               back_merge:
+ 154 00ec                       #can't back merge if it's last block
+ 155 00ec 3C080000	        la      $t0, metadata
+     00f0 35080000
+ 156 00f4 02284022	        sub     $t0, $s1, $t0
+ 157 00f8 3409000C	        li      $t1, NODE_SIZE
+ 158 00fc 0109001A	        div     $t1, $t0, $t1           #index of freed chunk
+     0100 00004812
+ 159 0104               
+ 160 0104 3C080000	        la      $t0, metadata_size
+     0108 35080000
+ 161 010c 8D080000	        lw      $t0, 0($t0)
+ 162 0110 2108FFFF	        addi    $t0, $t0, -1
+ 163 0114               
+ 164 0114 0128402A	        slt     $t0, $t1, $t0
+ 165 0118 11000015	        beq     $t0, $zero, front_merge
+ 166 011c               
+ 167 011c                       #check if next chunk is free
+ 168 011c 3408000C	        li      $t0, NODE_SIZE
+ 169 0120 02289020	        add     $s2, $s1, $t0           #s2 is next chunk
+ 170 0124 8E480004	        lw      $t0, 4($s2)
+ 171 0128 15000011	        bne     $t0, $zero, front_merge
+ 172 012c               
+ 173 012c                       #we can back merge
+ 174 012c                       #merge sizes
+ 175 012c 8E280000	        lw      $t0, 0($s1)
+ 176 0130 8E490000	        lw      $t1, 0($s2)
+ 177 0134 01094020	        add     $t0, $t0, $t1
+ 178 0138 AE280000	        sw      $t0, 0($s1)
+ 179 013c               
+ 180 013c                       #delete from array
+ 181 013c 3C080000	        la      $t0, metadata
+     0140 35080000
+ 182 0144 02284022	        sub     $t0, $s1, $t0
+ 183 0148 3409000C	        li      $t1, NODE_SIZE
+ 184 014c 0109001A	        div     $a0, $t0, $t1
+     0150 00002012
+ 185 0154 0C000143	        jal     shift_left
+ 186 0158               
+ 187 0158                       #update memory list size
+ 188 0158 3C090000	        la      $t1, metadata_size
+     015c 35290000
+ 189 0160 8D280000	        lw      $t0, 0($t1)
+ 190 0164 2108FFFF	        addi    $t0, $t0, -1
+ 191 0168 AD280000	        sw      $t0, 0($t1)
+ 192 016c               
+ 193 016c 0800005C	        j       front_merge
+ 194 0170               
+ 195 0170               front_merge:
+ 196 0170                       #can't front merge if it's first block
+ 197 0170 3C080000	        la      $t0, metadata
+     0174 35080000
+ 198 0178 1111001B	        beq     $t0, $s1, free_done
+ 199 017c               
+ 200 017c                       #check if previous chunk is free
+ 201 017c 3408000C	        li      $t0, NODE_SIZE
+ 202 0180 02289022	        sub     $s2, $s1, $t0           #s2 is previous chunk
+ 203 0184 8E480004	        lw      $t0, 4($s2)
+ 204 0188 15000017	        bne     $t0, $zero, free_done
+ 205 018c               
+ 206 018c                       #we can front merge
+ 207 018c                       #merge sizes
+ 208 018c 8E280000	        lw      $t0, 0($s1)
+ 209 0190 8E490000	        lw      $t1, 0($s2)
+ 210 0194 01094020	        add     $t0, $t0, $t1
+ 211 0198 AE480000	        sw      $t0, 0($s2)
+ 212 019c               
+ 213 019c                       #delete from array
+ 214 019c 3C080000	        la      $t0, metadata
+     01a0 35080000
+ 215 01a4 02484022	        sub     $t0, $s2, $t0
+ 216 01a8 3409000C	        li      $t1, NODE_SIZE
+ 217 01ac 0109001A	        div     $a0, $t0, $t1
+     01b0 00002012
+ 218 01b4 0C000143	        jal     shift_left
+ 219 01b8               
+ 220 01b8                       #update memory list size
+ 221 01b8 3C090000	        la      $t1, metadata_size
+     01bc 35290000
+ 222 01c0 8D280000	        lw      $t0, 0($t1)
+ 223 01c4 2108FFFF	        addi    $t0, $t0, -1
+ 224 01c8 AD280000	        sw      $t0, 0($t1)
+ 225 01cc               
+ 226 01cc 0800007A	        j       free_done
+ 227 01d0               
+ 228 01d0               bad_free:
+ 229 01d0 34020004	        li      $v0, PRINT_STRING
+ 230 01d4 3C040000	        la      $a0, bad_free_msg
+     01d8 34840000
+ 231 01dc 0000000C	        syscall
+ 232 01e0               
+ 233 01e0 3402000A	        li      $v0, EXIT
+ 234 01e4 0000000C	        syscall
+ 235 01e8               
+ 236 01e8               free_done:
+ 237 01e8 8FB40000	        lw      $s4, 0($sp)
+ 238 01ec 8FB30004	        lw      $s3, 4($sp)
+ 239 01f0 8FB20008	        lw      $s2, 8($sp)
+ 240 01f4 8FB1000C	        lw      $s1, 12($sp)
+ 241 01f8 8FB00010	        lw      $s0, 16($sp)
+ 242 01fc 8FBF0014	        lw      $ra, 20($sp)
+ 243 0200 23BD0018	        addi    $sp, $sp, 24
+ 244 0204 03E00008	        jr      $ra
+ 245 0208               
+ 246 0208               
+ 247 0208               #a0 - memory size
+ 248 0208               #v0 - allocated memory
+ 249 0208               malloc:
+ 250 0208 23BDFFE0	        addi    $sp, $sp, -32
+ 251 020c AFB6001C	        sw      $s6, 28($sp)
+ 252 0210 AFB50018	        sw      $s5, 24($sp)
+ 253 0214 AFBF0014	        sw      $ra, 20($sp)
+ 254 0218 AFB00010	        sw      $s0, 16($sp)
+ 255 021c AFB1000C	        sw      $s1, 12($sp)
+ 256 0220 AFB20008	        sw      $s2, 8($sp)
+ 257 0224 AFB30004	        sw      $s3, 4($sp)
+ 258 0228 AFB40000	        sw      $s4, 0($sp)
+ 259 022c               
+ 260 022c 00808021	        move    $s0, $a0                #s0 is memory size
+ 261 0230                       
+ 262 0230 34080004	        li      $t0, 4
+ 263 0234 0208001A	        rem     $t0, $s0, $t0
+     0238 00004010
+ 264 023c 15000022	        bne     $t0, $zero, next_4_mult
+ 265 0240               
+ 266 0240               best_fit:
+ 267 0240 34110000	        li      $s1, 0                  #s1 is current
+ 268 0244 2412FFFF	        li      $s2, -1                 #s2 is smallest delta
+ 269 0248 2413FFFF	        li      $s3, -1                 #s3 is best fit
+ 270 024c 3C140000	        la      $s4, metadata_size
+     0250 36940000
+ 271 0254 8E940000	        lw      $s4, 0($s4)             #s4 is metadata size
+ 272 0258                       
+ 273 0258               bf_loop:
+ 274 0258 0234402A	        slt     $t0, $s1, $s4
+ 275 025c 11000019	        beq     $t0, $zero, bf_loop_done
+ 276 0260               
+ 277 0260                       #get metadata
+ 278 0260 3408000C	        li      $t0, NODE_SIZE
+ 279 0264 01110018	        mul     $t0, $t0, $s1
+     0268 00004012
+ 280 026c 3C090000	        la      $t1, metadata
+     0270 35290000
+ 281 0274 0128A820	        add     $s5, $t1, $t0           #s5 is the current metadata
+ 282 0278                       
+ 283 0278                       #if this chunk is allocated, continue
+ 284 0278 8EA80004	        lw      $t0, 4($s5)
+ 285 027c 1500000F	        bne     $t0, $zero, bf_loop_end
+ 286 0280               
+ 287 0280                       #if this chunk is too small, continue
+ 288 0280 8EA80000	        lw      $t0, 0($s5)
+ 289 0284 0110482A	        slt     $t1, $t0, $s0
+ 290 0288 1520000C	        bne     $t1, $zero, bf_loop_end
+ 291 028c               
+ 292 028c                       #find delta
+ 293 028c 8EA40000	        lw      $a0, 0($s5)
+ 294 0290 02002821	        move    $a1, $s0
+ 295 0294 0C0001A6	        jal     delta
+ 296 0298 0040B021	        move    $s6, $v0                #s6 is current delta
+ 297 029c               
+ 298 029c                       #use this chunk if we don't have anything yet
+ 299 029c 2408FFFF	        li      $t0, -1
+ 300 02a0 12480003	        beq     $s2, $t0, better_fit
+ 301 02a4               
+ 302 02a4                       #use this chunk if the delta is smaller
+ 303 02a4 02D2482A	        slt     $t1, $s6, $s2
+ 304 02a8 15200001	        bne     $t1, $zero, better_fit
+ 305 02ac               
+ 306 02ac 080000AF	        j       bf_loop_end
+ 307 02b0               
+ 308 02b0               better_fit:
+ 309 02b0 02C09021	        move    $s2, $s6
+ 310 02b4 02A09821	        move    $s3, $s5
+ 311 02b8 080000AF	        j       bf_loop_end
+ 312 02bc               
+ 313 02bc               bf_loop_end:
+ 314 02bc 22310001	        addi    $s1, $s1, 1
+ 315 02c0 08000096	        j       bf_loop
+ 316 02c4               
+ 317 02c4               bf_loop_done:
+ 318 02c4 080000B8	        j       best_fit_done
+ 319 02c8               
+ 320 02c8               next_4_mult:
+ 321 02c8 34080004	        li      $t0, 4
+ 322 02cc 0208001A	        rem     $t1, $s0, $t0
+     02d0 00004810
+ 323 02d4 01094022	        sub     $t0, $t0, $t1
+ 324 02d8 02088020	        add     $s0, $s0, $t0
+ 325 02dc               
+ 326 02dc 08000090	        j       best_fit
+ 327 02e0               
+ 328 02e0               best_fit_done:
+ 329 02e0                       #check if no memory found
+ 330 02e0 2408FFFF	        li      $t0, -1
+ 331 02e4 11130025	        beq     $t0, $s3, no_memory
+ 332 02e8               
+ 333 02e8                       #split memory if needed
+ 334 02e8 8E680000	        lw      $t0, 0($s3)
+ 335 02ec 0208402A	        slt     $t0, $s0, $t0
+ 336 02f0 15000001	        bne     $t0, $zero, split_mem
+ 337 02f4                       
+ 338 02f4 080000D2	        j       malloc_done
+ 339 02f8               
+ 340 02f8               split_mem:
+ 341 02f8                       #make room for new entry
+ 342 02f8 3C080000	        la      $t0, metadata
+     02fc 35080000
+ 343 0300 02684022	        sub     $t0, $s3, $t0
+ 344 0304 3409000C	        li      $t1, NODE_SIZE
+ 345 0308 0109001A	        div     $a0, $t0, $t1
+     030c 00002012
+ 346 0310 0C00016B	        jal     shift_right
+ 347 0314               
+ 348 0314                       #increment memory list size
+ 349 0314 3C090000	        la      $t1, metadata_size
+     0318 35290000
+ 350 031c 8D280000	        lw      $t0, 0($t1)
+ 351 0320 21080001	        addi    $t0, $t0, 1
+ 352 0324 AD280000	        sw      $t0, 0($t1)
+ 353 0328               
+ 354 0328                       #add new metadata chunk
+ 355 0328 2275000C	        addi    $s5, $s3, NODE_SIZE             #s5 has the new node
+ 356 032c               
+ 357 032c                       #mark new node as free
+ 358 032c AEA00004	        sw      $zero, 4($s5)
+ 359 0330               
+ 360 0330                       #mark size as delta
+ 361 0330 AEB20000	        sw      $s2, 0($s5)
+ 362 0334               
+ 363 0334                       #add address pointer for new node
+ 364 0334 8E680008	        lw      $t0, 8($s3)
+ 365 0338 01104020	        add     $t0, $t0, $s0
+ 366 033c AEA80008	        sw      $t0, 8($s5)
+ 367 0340               
+ 368 0340                       #update old mem chunk size
+ 369 0340 AE700000	        sw      $s0, 0($s3)
+ 370 0344               
+ 371 0344 080000D2	        j       malloc_done
+ 372 0348               
+ 373 0348               malloc_done:
+ 374 0348                       #mark this as allocated
+ 375 0348 34080001	        li      $t0, 1
+ 376 034c AE680004	        sw      $t0, 4($s3)
+ 377 0350               
+ 378 0350                       #return best fit address
+ 379 0350 8E620008	        lw      $v0, 8($s3)
+ 380 0354               
+ 381 0354                       #clean up
+ 382 0354 8FB40000	        lw      $s4, 0($sp)
+ 383 0358 8FB30004	        lw      $s3, 4($sp)
+ 384 035c 8FB20008	        lw      $s2, 8($sp)
+ 385 0360 8FB1000C	        lw      $s1, 12($sp)
+ 386 0364 8FB00010	        lw      $s0, 16($sp)
+ 387 0368 8FBF0014	        lw      $ra, 20($sp)
+ 388 036c 8FB50018	        lw      $s5, 24($sp)
+ 389 0370 8FB6001C	        lw      $s6, 28($sp)
+ 390 0374 23BD0020	        addi    $sp, $sp, 32
+ 391 0378 03E00008	        jr      $ra
+ 392 037c               
+ 393 037c               no_memory:
+ 394 037c 34020004	        li      $v0, PRINT_STRING
+ 395 0380 3C040000	        la      $a0, no_memory_msg
+     0384 34840000
+ 396 0388 0000000C	        syscall
+ 397 038c               
+ 398 038c 3402000A	        li      $v0, EXIT
+ 399 0390 0000000C	        syscall
+ 400 0394               
+ 401 0394               #a0 - heap size
+ 402 0394               init_allocator:
+ 403 0394 23BDFFE8	        addi    $sp, $sp, -24
+ 404 0398 AFBF0014	        sw      $ra, 20($sp)
+ 405 039c AFB00010	        sw      $s0, 16($sp)
+ 406 03a0 AFB1000C	        sw      $s1, 12($sp)
+ 407 03a4 AFB20008	        sw      $s2, 8($sp)
+ 408 03a8 AFB30004	        sw      $s3, 4($sp)
+ 409 03ac AFB40000	        sw      $s4, 0($sp)
+ 410 03b0               
+ 411 03b0 00808021	        move    $s0, $a0                        #s0 is heap size
+ 412 03b4               
+ 413 03b4                       #size check
+ 414 03b4 34080004	        li      $t0, MIN_HEAP_SIZE
+ 415 03b8 0208482A	        slt     $t1, $s0, $t0
+ 416 03bc 1520000B	        bne     $t1, $zero, invalid_arena
+ 417 03c0               
+ 418 03c0 340803E8	        li      $t0, MAX_HEAP_SIZE
+ 419 03c4 0110482A	        slt     $t1, $t0, $s0
+ 420 03c8 15200008	        bne     $t1, $zero, invalid_arena
+ 421 03cc               
+ 422 03cc 3C110000	        la      $s1, metadata                   #s1 is metadata
+     03d0 36310000
+ 423 03d4               
+ 424 03d4 AE300000	        sw      $s0, 0($s1)                     #size=heap_size
+ 425 03d8 AE200004	        sw      $zero, 4($s1)                   #allocated=0
+ 426 03dc 3C080000	        la      $t0, heap
+     03e0 35080000
+ 427 03e4 AE280008	        sw      $t0, 8($s1)                     #address=heap
+ 428 03e8               
+ 429 03e8 08000101	        j       init_allocator_done
+ 430 03ec               
+ 431 03ec               invalid_arena:
+ 432 03ec 34020004	        li      $v0, PRINT_STRING
+ 433 03f0 3C040000	        la      $a0, invalid_arena_msg
+     03f4 34840000
+ 434 03f8 0000000C	        syscall
+ 435 03fc               
+ 436 03fc 3402000A	        li      $v0, EXIT
+ 437 0400 0000000C	        syscall
+ 438 0404               
+ 439 0404               init_allocator_done:
+ 440 0404 8FB40000	        lw      $s4, 0($sp)
+ 441 0408 8FB30004	        lw      $s3, 4($sp)
+ 442 040c 8FB20008	        lw      $s2, 8($sp)
+ 443 0410 8FB1000C	        lw      $s1, 12($sp)
+ 444 0414 8FB00010	        lw      $s0, 16($sp)
+ 445 0418 8FBF0014	        lw      $ra, 20($sp)
+ 446 041c 23BD0018	        addi    $sp, $sp, 24
+ 447 0420 03E00008	        jr      $ra
+ 448 0424               
+ 449 0424               
+ 450 0424               #prints the memory list
+ 451 0424               print_memory:
+ 452 0424 23BDFFE8	        addi    $sp, $sp, -24
+ 453 0428 AFBF0014	        sw      $ra, 20($sp)
+ 454 042c AFB00010	        sw      $s0, 16($sp)
+ 455 0430 AFB1000C	        sw      $s1, 12($sp)
+ 456 0434 AFB20008	        sw      $s2, 8($sp)
+ 457 0438 AFB30004	        sw      $s3, 4($sp)
+ 458 043c AFB40000	        sw      $s4, 0($sp)
+ 459 0440               
+ 460 0440 34100000	        li      $s0, 0                  #s0 is index
+ 461 0444 3C110000	        la      $s1, metadata_size
+     0448 36310000
+ 462 044c 8E310000	        lw      $s1, 0($s1)             #s1 is upper bound
+ 463 0450               
+ 464 0450               print_loop:
+ 465 0450 0211402A	        slt     $t0, $s0, $s1
+ 466 0454 11000025	        beq     $t0, $zero, print_done
+ 467 0458               
+ 468 0458 3C120000	        la      $s2, metadata
+     045c 36520000
+ 469 0460 3408000C	        li      $t0, NODE_SIZE
+ 470 0464 01100018	        mul     $t0, $t0, $s0
+     0468 00004012
+ 471 046c 02489020	        add     $s2, $s2, $t0           #s2 is the metadata
+ 472 0470               
+ 473 0470 34020004	        li      $v0, PRINT_STRING
+ 474 0474 3C040000	        la      $a0, size_msg
+     0478 34840000
+ 475 047c 0000000C	        syscall
+ 476 0480               
+ 477 0480 34020001	        li      $v0, PRINT_INT
+ 478 0484 8E440000	        lw      $a0, 0($s2)
+ 479 0488 0000000C	        syscall
+ 480 048c               
+ 481 048c 34020004	        li      $v0, PRINT_STRING
+ 482 0490 3C040000	        la      $a0, allocated_msg
+     0494 34840000
+ 483 0498 0000000C	        syscall
+ 484 049c               
+ 485 049c 34020001	        li      $v0, PRINT_INT
+ 486 04a0 8E440004	        lw      $a0, 4($s2)
+ 487 04a4 0000000C	        syscall
+ 488 04a8               
+ 489 04a8 34020004	        li      $v0, PRINT_STRING
+ 490 04ac 3C040000	        la      $a0, address_msg
+     04b0 34840000
+ 491 04b4 0000000C	        syscall
+ 492 04b8               
+ 493 04b8                       #calculate relative addr
+ 494 04b8 8E480008	        lw      $t0, 8($s2)
+ 495 04bc 3C090000	        la      $t1, heap
+     04c0 35290000
+ 496 04c4 01094022	        sub     $t0, $t0, $t1
+ 497 04c8               
+ 498 04c8 34020001	        li      $v0, PRINT_INT
+ 499 04cc 01002021	        move    $a0, $t0
+ 500 04d0 0000000C	        syscall
+ 501 04d4               
+ 502 04d4 34020004	        li      $v0, PRINT_STRING
+ 503 04d8 3C040000	        la      $a0, end_bracket
+     04dc 34840000
+ 504 04e0 0000000C	        syscall
+ 505 04e4               
+ 506 04e4 22100001	        addi    $s0, $s0, 1
+ 507 04e8 08000114	        j       print_loop
+ 508 04ec               
+ 509 04ec               print_done:
+ 510 04ec 8FB40000	        lw      $s4, 0($sp)
+ 511 04f0 8FB30004	        lw      $s3, 4($sp)
+ 512 04f4 8FB20008	        lw      $s2, 8($sp)
+ 513 04f8 8FB1000C	        lw      $s1, 12($sp)
+ 514 04fc 8FB00010	        lw      $s0, 16($sp)
+ 515 0500 8FBF0014	        lw      $ra, 20($sp)
+ 516 0504 23BD0018	        addi    $sp, $sp, 24
+ 517 0508 03E00008	        jr      $ra
+ 518 050c               
+ 519 050c               
+ 520 050c               #a0 - shift everything to the left of a0 (exclusive) by 1 to the left
+ 521 050c               shift_left:
+ 522 050c 23BDFFE8	        addi    $sp, $sp, -24
+ 523 0510 AFBF0014	        sw      $ra, 20($sp)
+ 524 0514 AFB00010	        sw      $s0, 16($sp)
+ 525 0518 AFB1000C	        sw      $s1, 12($sp)
+ 526 051c AFB20008	        sw      $s2, 8($sp)
+ 527 0520 AFB30004	        sw      $s3, 4($sp)
+ 528 0524 AFB40000	        sw      $s4, 0($sp)
+ 529 0528               
+ 530 0528 20900001	        addi    $s0, $a0, 1                     #s0 index
+ 531 052c 3C110000	        la      $s1, metadata_size
+     0530 36310000
+ 532 0534 8E310000	        lw      $s1, 0($s1)                     #s1 is upper bound
+ 533 0538 2231FFFF	        addi    $s1, $s1, -1
+ 534 053c               
+ 535 053c               shift_left_loop:
+ 536 053c 0211402A	        slt     $t0, $s0, $s1
+ 537 0540 11000012	        beq     $t0, $zero, shift_left_done
+ 538 0544               
+ 539 0544 22120001	        addi    $s2, $s0, 1                     #s2 is index+1
+ 540 0548                       
+ 541 0548                       #find element at index + 1
+ 542 0548 3408000C	        li      $t0, NODE_SIZE
+ 543 054c 01120018	        mul     $t0, $t0, $s2
+     0550 00004012
+ 544 0554 3C090000	        la      $t1, metadata
+     0558 35290000
+ 545 055c 01094020	        add     $t0, $t0, $t1
+ 546 0560 01009821	        move    $s3, $t0                        #s3 is node at i + 1
+ 547 0564               
+ 548 0564 3408000C	        li      $t0, NODE_SIZE
+ 549 0568 0268A022	        sub     $s4, $s3, $t0                   #s4 is node at i
+ 550 056c               
+ 551 056c                       #shift left
+ 552 056c 8E680000	        lw      $t0, 0($s3)
+ 553 0570 AE880000	        sw      $t0, 0($s4)
+ 554 0574 8E680004	        lw      $t0, 4($s3)
+ 555 0578 AE880004	        sw      $t0, 4($s4)
+ 556 057c 8E680008	        lw      $t0, 8($s3)
+ 557 0580 AE880008	        sw      $t0, 8($s4)
+ 558 0584               
+ 559 0584 22100001	        addi    $s0, $s0, 1
+ 560 0588 0800014F	        j       shift_left_loop
+ 561 058c               
+ 562 058c               shift_left_done:
+ 563 058c 8FB40000	        lw      $s4, 0($sp)
+ 564 0590 8FB30004	        lw      $s3, 4($sp)
+ 565 0594 8FB20008	        lw      $s2, 8($sp)
+ 566 0598 8FB1000C	        lw      $s1, 12($sp)
+ 567 059c 8FB00010	        lw      $s0, 16($sp)
+ 568 05a0 8FBF0014	        lw      $ra, 20($sp)
+ 569 05a4 23BD0018	        addi    $sp, $sp, 24
+ 570 05a8 03E00008	        jr      $ra
+ 571 05ac               
+ 572 05ac               
+ 573 05ac               #a0 - shift everything to the right of a0 (exclusive) by 1 to the right
+ 574 05ac               shift_right:
+ 575 05ac 23BDFFE8	        addi    $sp, $sp, -24
+ 576 05b0 AFBF0014	        sw      $ra, 20($sp)
+ 577 05b4 AFB00010	        sw      $s0, 16($sp)
+ 578 05b8 AFB1000C	        sw      $s1, 12($sp)
+ 579 05bc AFB20008	        sw      $s2, 8($sp)
+ 580 05c0 AFB30004	        sw      $s3, 4($sp)
+ 581 05c4 AFB40000	        sw      $s4, 0($sp)
+ 582 05c8               
+ 583 05c8 20900001	        addi    $s0, $a0, 1                     #s0 is lower bound
+ 584 05cc 3C110000	        la      $s1, metadata_size
+     05d0 36310000
+ 585 05d4 8E310000	        lw      $s1, 0($s1)                     #s1 is index
+ 586 05d8               
+ 587 05d8               shift_right_loop:
+ 588 05d8 0211402A	        slt     $t0, $s0, $s1
+ 589 05dc 11000011	        beq     $t0, $zero, shift_right_done
+ 590 05e0               
+ 591 05e0 2232FFFF	        addi    $s2, $s1, -1                    #s2 is index-1
+ 592 05e4                       
+ 593 05e4                       #find element at index - 1
+ 594 05e4 3408000C	        li      $t0, NODE_SIZE
+ 595 05e8 01120018	        mul     $t0, $t0, $s2
+     05ec 00004012
+ 596 05f0 3C090000	        la      $t1, metadata
+     05f4 35290000
+ 597 05f8 01094020	        add     $t0, $t0, $t1
+ 598 05fc 01009821	        move    $s3, $t0                        #s3 is node at i - 1
+ 599 0600               
+ 600 0600 2274000C	        addi    $s4, $s3, NODE_SIZE             #s4 is node at i
+ 601 0604               
+ 602 0604                       #shift right
+ 603 0604 8E680000	        lw      $t0, 0($s3)
+ 604 0608 AE880000	        sw      $t0, 0($s4)
+ 605 060c 8E680004	        lw      $t0, 4($s3)
+ 606 0610 AE880004	        sw      $t0, 4($s4)
+ 607 0614 8E680008	        lw      $t0, 8($s3)
+ 608 0618 AE880008	        sw      $t0, 8($s4)
+ 609 061c               
+ 610 061c 2231FFFF	        addi    $s1, $s1, -1
+ 611 0620 08000176	        j       shift_right_loop
+ 612 0624               
+ 613 0624               shift_right_done:
+ 614 0624 8FB40000	        lw      $s4, 0($sp)
+ 615 0628 8FB30004	        lw      $s3, 4($sp)
+ 616 062c 8FB20008	        lw      $s2, 8($sp)
+ 617 0630 8FB1000C	        lw      $s1, 12($sp)
+ 618 0634 8FB00010	        lw      $s0, 16($sp)
+ 619 0638 8FBF0014	        lw      $ra, 20($sp)
+ 620 063c 23BD0018	        addi    $sp, $sp, 24
+ 621 0640 03E00008	        jr      $ra
+ 622 0644               
+ 623 0644               #a0 - a
+ 624 0644               #a0 - b
+ 625 0644               #v0 - smaller of a and b
+ 626 0644               minimum:
+ 627 0644 23BDFFE8	        addi    $sp, $sp, -24
+ 628 0648 AFBF0014	        sw      $ra, 20($sp)
+ 629 064c AFB00010	        sw      $s0, 16($sp)
+ 630 0650 AFB1000C	        sw      $s1, 12($sp)
+ 631 0654 AFB20008	        sw      $s2, 8($sp)
+ 632 0658 AFB30004	        sw      $s3, 4($sp)
+ 633 065c AFB40000	        sw      $s4, 0($sp)
+ 634 0660               
+ 635 0660 0085402A	        slt     $t0, $a0, $a1
+ 636 0664 15000002	        bne     $t0, $zero, a_smaller
+ 637 0668               
+ 638 0668 00A01021	        move    $v0, $a1
+ 639 066c 0800019E	        j       minimum_done
+ 640 0670               
+ 641 0670               a_smaller:
+ 642 0670 00801021	        move    $v0, $a0
+ 643 0674 0800019E	        j       minimum_done
+ 644 0678               
+ 645 0678               minimum_done:
+ 646 0678 8FB40000	        lw      $s4, 0($sp)
+ 647 067c 8FB30004	        lw      $s3, 4($sp)
+ 648 0680 8FB20008	        lw      $s2, 8($sp)
+ 649 0684 8FB1000C	        lw      $s1, 12($sp)
+ 650 0688 8FB00010	        lw      $s0, 16($sp)
+ 651 068c 8FBF0014	        lw      $ra, 20($sp)
+ 652 0690 23BD0018	        addi    $sp, $sp, 24
+ 653 0694 03E00008	        jr      $ra
+ 654 0698               
+ 655 0698               #a0 - a
+ 656 0698               #a1 - b
+ 657 0698               #v0 - abs(a-b)
+ 658 0698               delta:
+ 659 0698 23BDFFE8	        addi    $sp, $sp, -24
+ 660 069c AFBF0014	        sw      $ra, 20($sp)
+ 661 06a0 AFB00010	        sw      $s0, 16($sp)
+ 662 06a4 AFB1000C	        sw      $s1, 12($sp)
+ 663 06a8 AFB20008	        sw      $s2, 8($sp)
+ 664 06ac AFB30004	        sw      $s3, 4($sp)
+ 665 06b0 AFB40000	        sw      $s4, 0($sp)
+ 666 06b4               
+ 667 06b4 00858022	        sub     $s0, $a0, $a1
+ 668 06b8 0200402A	        slt     $t0, $s0, $zero
+ 669 06bc 15000002	        bne     $t0, $zero, negate_delta
+ 670 06c0               
+ 671 06c0 02001021	        move    $v0, $s0
+ 672 06c4 080001B6	        j       delta_done
+ 673 06c8               
+ 674 06c8               negate_delta:
+ 675 06c8 2408FFFF	        li      $t0, -1
+ 676 06cc 02080018	        mul     $v0, $s0, $t0
+     06d0 00001012
+ 677 06d4 080001B6	        j       delta_done
+ 678 06d8                       
+ 679 06d8               delta_done:
+ 680 06d8 8FB40000	        lw      $s4, 0($sp)
+ 681 06dc 8FB30004	        lw      $s3, 4($sp)
+ 682 06e0 8FB20008	        lw      $s2, 8($sp)
+ 683 06e4 8FB1000C	        lw      $s1, 12($sp)
+ 684 06e8 8FB00010	        lw      $s0, 16($sp)
+ 685 06ec 8FBF0014	        lw      $ra, 20($sp)
+ 686 06f0 23BD0018	        addi    $sp, $sp, 24
+ 687 06f4 03E00008	        jr      $ra
+ 688 06f8               
+ 689 06f8               read:
+ 690 06f8 23BDFFE8	        addi    $sp, $sp, -24
+ 691 06fc AFBF0014	        sw      $ra, 20($sp)
+ 692 0700 AFB00010	        sw      $s0, 16($sp)
+ 693 0704 AFB1000C	        sw      $s1, 12($sp)
+ 694 0708 AFB20008	        sw      $s2, 8($sp)
+ 695 070c AFB30004	        sw      $s3, 4($sp)
+ 696 0710 AFB40000	        sw      $s4, 0($sp)
+ 697 0714                       
+ 698 0714                       #first line is allocator size
+ 699 0714 34020008	        li      $v0, READ_STRING
+ 700 0718 3C040000	        la      $a0, buffer
+     071c 34840000
+ 701 0720 0000000C	        syscall
+ 702 0724 0C0002C0	        jal     handle_init
+ 703 0728               read_loop:
+ 704 0728                       #read line
+ 705 0728 3C080000	        la      $t0, buffer
+     072c 35080000
+ 706 0730 A1000000	        sb      $zero, 0($t0)           #clear first char so we know when we hit EOF
+ 707 0734 34020008	        li      $v0, READ_STRING
+ 708 0738 3C040000	        la      $a0, buffer
+     073c 34840000
+ 709 0740 34050080	        li      $a1, 128
+ 710 0744 0000000C	        syscall
+ 711 0748               
+ 712 0748                       #check if we finished
+ 713 0748 3C080000	        la      $t0, buffer
+     074c 35080000
+ 714 0750 81090000	        lb      $t1, 0($t0)
+ 715 0754 340A0000	        li      $t2, '\0'
+ 716 0758 112A0151	        beq     $t1, $t2, read_done
+ 717 075c               
+ 718 075c                       #check for options
+ 719 075c                       #malloc case
+ 720 075c 3C080000	        la      $t0, buffer
+     0760 35080000
+ 721 0764 81090000	        lb      $t1, 0($t0)
+ 722 0768 340A006D	        li      $t2, 'm'
+ 723 076c 112A0015	        beq     $t1, $t2, handle_malloc
+ 724 0770                       
+ 725 0770                       #free case
+ 726 0770 3C080000	        la      $t0, buffer
+     0774 35080000
+ 727 0778 81090000	        lb      $t1, 0($t0)
+ 728 077c 340A0066	        li      $t2, 'f'
+ 729 0780 112A0046	        beq     $t1, $t2, handle_free
+ 730 0784               
+ 731 0784                       #print case
+ 732 0784 3C080000	        la      $t0, buffer
+     0788 35080000
+ 733 078c 81090000	        lb      $t1, 0($t0)
+ 734 0790 340A0070	        li      $t2, 'p'
+ 735 0794 112A006E	        beq     $t1, $t2, handle_print
+ 736 0798               
+ 737 0798                       #get case
+ 738 0798 3C080000	        la      $t0, buffer
+     079c 35080000
+ 739 07a0 81090000	        lb      $t1, 0($t0)
+ 740 07a4 340A0067	        li      $t2, 'g'
+ 741 07a8 112A007B	        beq     $t1, $t2, handle_get
+ 742 07ac               
+ 743 07ac                       #set case
+ 744 07ac 3C080000	        la      $t0, buffer
+     07b0 35080000
+ 745 07b4 81090000	        lb      $t1, 0($t0)
+ 746 07b8 340A0073	        li      $t2, 's'
+ 747 07bc 112A00A1	        beq     $t1, $t2, handle_set
+ 748 07c0               
+ 749 07c0 080001CA	        j       read_loop
+ 750 07c4               
+ 751 07c4               handle_malloc:
+ 752 07c4 0C0001F3	        jal     parse_malloc
+ 753 07c8 080001CA	        j       read_loop
+ 754 07cc               
+ 755 07cc               parse_malloc:
+ 756 07cc 23BDFFE8	        addi    $sp, $sp, -24
+ 757 07d0 AFBF0014	        sw      $ra, 20($sp)
+ 758 07d4 AFB00010	        sw      $s0, 16($sp)
+ 759 07d8 AFB1000C	        sw      $s1, 12($sp)
+ 760 07dc AFB20008	        sw      $s2, 8($sp)
+ 761 07e0 AFB30004	        sw      $s3, 4($sp)
+ 762 07e4 AFB40000	        sw      $s4, 0($sp)
+ 763 07e8               
+ 764 07e8 3C100000	        la      $s0, buffer
+     07ec 36100000
+ 765 07f0 82110002	        lb      $s1, 2($s0)             #s1 contains the variable name
+ 766 07f4               
+ 767 07f4 22100004	        addi    $s0, $s0, 4
+ 768 07f8 02002021	        move    $a0, $s0
+ 769 07fc 0C0002F9	        jal     atoi
+ 770 0800 00409021	        move    $s2, $v0                #s2 contains the memory size
+ 771 0804               
+ 772 0804 02402021	        move    $a0, $s2
+ 773 0808 0C000082	        jal     malloc
+ 774 080c 0040A021	        move    $s4, $v0                #s4 is allocated memory
+ 775 0810                       
+ 776 0810 3402000B	        li      $v0, PRINT_CHAR
+ 777 0814 02202021	        move    $a0, $s1
+ 778 0818 0000000C	        syscall
+ 779 081c               
+ 780 081c 34020004	        li      $v0, PRINT_STRING
+ 781 0820 3C040000	        la      $a0, malloc_message_middle
+     0824 34840000
+ 782 0828 0000000C	        syscall
+ 783 082c               
+ 784 082c 34020001	        li      $v0, PRINT_INT
+ 785 0830 02402021	        move    $a0, $s2
+ 786 0834 0000000C	        syscall
+ 787 0838               
+ 788 0838 34020004	        li      $v0, PRINT_STRING
+ 789 083c 3C040000	        la      $a0, right_parentheses
+     0840 34840000
+ 790 0844 0000000C	        syscall
+ 791 0848               
+ 792 0848 34020004	        li      $v0, PRINT_STRING
+ 793 084c 3C040000	        la      $a0, newline
+     0850 34840000
+ 794 0854 0000000C	        syscall
+ 795 0858               
+ 796 0858                       #store this memory
+ 797 0858 34080061	        li      $t0, 'a'
+ 798 085c 02289822	        sub     $s3, $s1, $t0           #s3 is index
+ 799 0860               
+ 800 0860 34080004	        li      $t0, 4
+ 801 0864 01130018	        mul     $t0, $t0, $s3
+     0868 00004012
+ 802 086c 3C090000	        la      $t1, variables
+     0870 35290000
+ 803 0874 01094020	        add     $t0, $t0, $t1
+ 804 0878                       
+ 805 0878 AD140000	        sw      $s4, 0($t0)
+ 806 087c               
+ 807 087c 8FB40000	        lw      $s4, 0($sp)
+ 808 0880 8FB30004	        lw      $s3, 4($sp)
+ 809 0884 8FB20008	        lw      $s2, 8($sp)
+ 810 0888 8FB1000C	        lw      $s1, 12($sp)
+ 811 088c 8FB00010	        lw      $s0, 16($sp)
+ 812 0890 8FBF0014	        lw      $ra, 20($sp)
+ 813 0894 23BD0018	        addi    $sp, $sp, 24
+ 814 0898 03E00008	        jr      $ra
+ 815 089c               
+ 816 089c               handle_free:
+ 817 089c 0C000229	        jal     parse_free
+ 818 08a0 080001CA	        j       read_loop
+ 819 08a4               
+ 820 08a4               parse_free:
+ 821 08a4 23BDFFE8	        addi    $sp, $sp, -24
+ 822 08a8 AFBF0014	        sw      $ra, 20($sp)
+ 823 08ac AFB00010	        sw      $s0, 16($sp)
+ 824 08b0 AFB1000C	        sw      $s1, 12($sp)
+ 825 08b4 AFB20008	        sw      $s2, 8($sp)
+ 826 08b8 AFB30004	        sw      $s3, 4($sp)
+ 827 08bc AFB40000	        sw      $s4, 0($sp)
+ 828 08c0               
+ 829 08c0 3C100000	        la      $s0, buffer
+     08c4 36100000
+ 830 08c8 82110002	        lb      $s1, 2($s0)             #s1 contains the variable name
+ 831 08cc               
+ 832 08cc 34080061	        li      $t0, 'a'
+ 833 08d0 02284022	        sub     $t0, $s1, $t0
+ 834 08d4 34090004	        li      $t1, 4
+ 835 08d8 01280018	        mul     $t1, $t1, $t0
+     08dc 00004812
+ 836 08e0 3C080000	        la      $t0, variables
+     08e4 35080000
+ 837 08e8 01094020	        add     $t0, $t0, $t1
+ 838 08ec               
+ 839 08ec 8D040000	        lw      $a0, 0($t0)
+ 840 08f0 0C00002C	        jal     free
+ 841 08f4               
+ 842 08f4               
+ 843 08f4 34020004	        li      $v0, PRINT_STRING
+ 844 08f8 3C040000	        la      $a0, free_message_front
+     08fc 34840000
+ 845 0900 0000000C	        syscall
+ 846 0904               
+ 847 0904 3402000B	        li      $v0, PRINT_CHAR
+ 848 0908 02202021	        move    $a0, $s1
+ 849 090c 0000000C	        syscall
+ 850 0910               
+ 851 0910 34020004	        li      $v0, PRINT_STRING
+ 852 0914 3C040000	        la      $a0, right_parentheses
+     0918 34840000
+ 853 091c 0000000C	        syscall
+ 854 0920               
+ 855 0920 34020004	        li      $v0, PRINT_STRING
+ 856 0924 3C040000	        la      $a0, newline
+     0928 34840000
+ 857 092c 0000000C	        syscall
+ 858 0930               
+ 859 0930 8FB40000	        lw      $s4, 0($sp)
+ 860 0934 8FB30004	        lw      $s3, 4($sp)
+ 861 0938 8FB20008	        lw      $s2, 8($sp)
+ 862 093c 8FB1000C	        lw      $s1, 12($sp)
+ 863 0940 8FB00010	        lw      $s0, 16($sp)
+ 864 0944 8FBF0014	        lw      $ra, 20($sp)
+ 865 0948 23BD0018	        addi    $sp, $sp, 24
+ 866 094c 03E00008	        jr      $ra
+ 867 0950               
+ 868 0950               handle_print:
+ 869 0950 0C000256	        jal     parse_print
+ 870 0954 080001CA	        j       read_loop
+ 871 0958               
+ 872 0958               parse_print:
+ 873 0958 23BDFFE8	        addi    $sp, $sp, -24
+ 874 095c AFBF0014	        sw      $ra, 20($sp)
+ 875 0960 AFB00010	        sw      $s0, 16($sp)
+ 876 0964 AFB1000C	        sw      $s1, 12($sp)
+ 877 0968 AFB20008	        sw      $s2, 8($sp)
+ 878 096c AFB30004	        sw      $s3, 4($sp)
+ 879 0970 AFB40000	        sw      $s4, 0($sp)
+ 880 0974               
+ 881 0974 0C000109	        jal     print_memory
+ 882 0978               
+ 883 0978 8FB40000	        lw      $s4, 0($sp)
+ 884 097c 8FB30004	        lw      $s3, 4($sp)
+ 885 0980 8FB20008	        lw      $s2, 8($sp)
+ 886 0984 8FB1000C	        lw      $s1, 12($sp)
+ 887 0988 8FB00010	        lw      $s0, 16($sp)
+ 888 098c 8FBF0014	        lw      $ra, 20($sp)
+ 889 0990 23BD0018	        addi    $sp, $sp, 24
+ 890 0994 03E00008	        jr      $ra
+ 891 0998               
+ 892 0998               handle_get:
+ 893 0998 0C000268	        jal     parse_get
+ 894 099c 080001CA	        j       read_loop
+ 895 09a0               
+ 896 09a0               parse_get:
+ 897 09a0 23BDFFE8	        addi    $sp, $sp, -24
+ 898 09a4 AFBF0014	        sw      $ra, 20($sp)
+ 899 09a8 AFB00010	        sw      $s0, 16($sp)
+ 900 09ac AFB1000C	        sw      $s1, 12($sp)
+ 901 09b0 AFB20008	        sw      $s2, 8($sp)
+ 902 09b4 AFB30004	        sw      $s3, 4($sp)
+ 903 09b8 AFB40000	        sw      $s4, 0($sp)
+ 904 09bc               
+ 905 09bc 3C100000	        la      $s0, buffer
+     09c0 36100000
+ 906 09c4 82110002	        lb      $s1, 2($s0)             #s1 contains the variable name
+ 907 09c8               
+ 908 09c8 34080061	        li      $t0, 'a'
+ 909 09cc 02284022	        sub     $t0, $s1, $t0
+ 910 09d0 34090004	        li      $t1, 4
+ 911 09d4 01280018	        mul     $t1, $t1, $t0
+     09d8 00004812
+ 912 09dc 3C080000	        la      $t0, variables
+     09e0 35080000
+ 913 09e4 01094020	        add     $t0, $t0, $t1
+ 914 09e8               
+ 915 09e8 8D120000	        lw      $s2, 0($t0)             #s2 contains the variable value
+ 916 09ec               
+ 917 09ec 3402000B	        li      $v0, PRINT_CHAR
+ 918 09f0 02202021	        move    $a0, $s1
+ 919 09f4 0000000C	        syscall
+ 920 09f8               
+ 921 09f8 34020004	        li      $v0, PRINT_STRING
+ 922 09fc 3C040000	        la      $a0, double_equals
+     0a00 34840000
+ 923 0a04 0000000C	        syscall
+ 924 0a08               
+ 925 0a08 34020001	        li      $v0, PRINT_INT
+ 926 0a0c 02402021	        move    $a0, $s2
+ 927 0a10 0000000C	        syscall
+ 928 0a14               
+ 929 0a14 34020004	        li      $v0, PRINT_STRING
+ 930 0a18 3C040000	        la      $a0, newline
+     0a1c 34840000
+ 931 0a20 0000000C	        syscall
+ 932 0a24               
+ 933 0a24 8FB40000	        lw      $s4, 0($sp)
+ 934 0a28 8FB30004	        lw      $s3, 4($sp)
+ 935 0a2c 8FB20008	        lw      $s2, 8($sp)
+ 936 0a30 8FB1000C	        lw      $s1, 12($sp)
+ 937 0a34 8FB00010	        lw      $s0, 16($sp)
+ 938 0a38 8FBF0014	        lw      $ra, 20($sp)
+ 939 0a3c 23BD0018	        addi    $sp, $sp, 24
+ 940 0a40 03E00008	        jr      $ra
+ 941 0a44               
+ 942 0a44               handle_set:
+ 943 0a44 0C000293	        jal     parse_set
+ 944 0a48 080001CA	        j       read_loop
+ 945 0a4c               
+ 946 0a4c               parse_set:
+ 947 0a4c 23BDFFE8	        addi    $sp, $sp, -24
+ 948 0a50 AFBF0014	        sw      $ra, 20($sp)
+ 949 0a54 AFB00010	        sw      $s0, 16($sp)
+ 950 0a58 AFB1000C	        sw      $s1, 12($sp)
+ 951 0a5c AFB20008	        sw      $s2, 8($sp)
+ 952 0a60 AFB30004	        sw      $s3, 4($sp)
+ 953 0a64 AFB40000	        sw      $s4, 0($sp)
+ 954 0a68               
+ 955 0a68 3C100000	        la      $s0, buffer
+     0a6c 36100000
+ 956 0a70 82110002	        lb      $s1, 2($s0)             #s1 has the variable name
+ 957 0a74               
+ 958 0a74 22100004	        addi    $s0, $s0, 4
+ 959 0a78 02002021	        move    $a0, $s0
+ 960 0a7c 0C0002F9	        jal     atoi
+ 961 0a80 00409021	        move    $s2, $v0                #s2 has the variable value
+ 962 0a84               
+ 963 0a84 3402000B	        li      $v0, PRINT_CHAR
+ 964 0a88 02202021	        move    $a0, $s1
+ 965 0a8c 0000000C	        syscall
+ 966 0a90               
+ 967 0a90 34020004	        li      $v0, PRINT_STRING
+ 968 0a94 3C040000	        la      $a0, equals
+     0a98 34840000
+ 969 0a9c 0000000C	        syscall
+ 970 0aa0               
+ 971 0aa0 34020001	        li      $v0, PRINT_INT
+ 972 0aa4 02402021	        move    $a0, $s2
+ 973 0aa8 0000000C	        syscall
+ 974 0aac               
+ 975 0aac 34020004	        li      $v0, PRINT_STRING
+ 976 0ab0 3C040000	        la      $a0, newline
+     0ab4 34840000
+ 977 0ab8 0000000C	        syscall
+ 978 0abc               
+ 979 0abc 34080061	        li      $t0, 'a'
+ 980 0ac0 02284022	        sub     $t0, $s1, $t0
+ 981 0ac4 34090004	        li      $t1, 4
+ 982 0ac8 01280018	        mul     $t1, $t1, $t0
+     0acc 00004812
+ 983 0ad0 3C080000	        la      $t0, variables
+     0ad4 35080000
+ 984 0ad8 01094020	        add     $t0, $t0, $t1
+ 985 0adc               
+ 986 0adc AD120000	        sw      $s2, 0($t0)
+ 987 0ae0               
+ 988 0ae0 8FB40000	        lw      $s4, 0($sp)
+ 989 0ae4 8FB30004	        lw      $s3, 4($sp)
+ 990 0ae8 8FB20008	        lw      $s2, 8($sp)
+ 991 0aec 8FB1000C	        lw      $s1, 12($sp)
+ 992 0af0 8FB00010	        lw      $s0, 16($sp)
+ 993 0af4 8FBF0014	        lw      $ra, 20($sp)
+ 994 0af8 23BD0018	        addi    $sp, $sp, 24
+ 995 0afc 03E00008	        jr      $ra
+ 996 0b00               
+ 997 0b00               handle_init:
+ 998 0b00 0C0002C2	        jal     parse_init
+ 999 0b04 080001CA	        j       read_loop
+1000 0b08               
+1001 0b08               parse_init:
+1002 0b08 23BDFFE8	        addi    $sp, $sp, -24
+1003 0b0c AFBF0014	        sw      $ra, 20($sp)
+1004 0b10 AFB00010	        sw      $s0, 16($sp)
+1005 0b14 AFB1000C	        sw      $s1, 12($sp)
+1006 0b18 AFB20008	        sw      $s2, 8($sp)
+1007 0b1c AFB30004	        sw      $s3, 4($sp)
+1008 0b20 AFB40000	        sw      $s4, 0($sp)
+1009 0b24               
+1010 0b24                       #convert arena size to integer
+1011 0b24 3C040000	        la      $a0, buffer
+     0b28 34840000
+1012 0b2c 0C0002F9	        jal     atoi
+1013 0b30 00408021	        move    $s0, $v0        #s0 contains arena size integer
+1014 0b34               
+1015 0b34 02002021	        move    $a0, $s0
+1016 0b38 0C0000E5	        jal     init_allocator
+1017 0b3c               
+1018 0b3c                       #print initialization msg
+1019 0b3c 34020004	        li      $v0, PRINT_STRING
+1020 0b40 3C040000	        la      $a0, init_message_front
+     0b44 34840000
+1021 0b48 0000000C	        syscall
+1022 0b4c 34020001	        li      $v0, PRINT_INT
+1023 0b50 02002021	        move    $a0, $s0
+1024 0b54 0000000C	        syscall
+1025 0b58 34020004	        li      $v0, PRINT_STRING
+1026 0b5c 3C040000	        la      $a0, init_message_back
+     0b60 34840000
+1027 0b64 0000000C	        syscall
+1028 0b68               
+1029 0b68 8FB40000	        lw      $s4, 0($sp)
+1030 0b6c 8FB30004	        lw      $s3, 4($sp)
+1031 0b70 8FB20008	        lw      $s2, 8($sp)
+1032 0b74 8FB1000C	        lw      $s1, 12($sp)
+1033 0b78 8FB00010	        lw      $s0, 16($sp)
+1034 0b7c 8FBF0014	        lw      $ra, 20($sp)
+1035 0b80 23BD0018	        addi    $sp, $sp, 24
+1036 0b84 03E00008	        jr      $ra
+1037 0b88               
+1038 0b88               #a0 - the exponent
+1039 0b88               #a1 - the base
+1040 0b88               #v0 - base raised to the exponent
+1041 0b88               exponent:
+1042 0b88 23BDFFE8	        addi    $sp, $sp, -24
+1043 0b8c AFBF0014	        sw      $ra, 20($sp)
+1044 0b90 AFB00010	        sw      $s0, 16($sp)
+1045 0b94 AFB1000C	        sw      $s1, 12($sp)
+1046 0b98 AFB20008	        sw      $s2, 8($sp)
+1047 0b9c AFB30004	        sw      $s3, 4($sp)
+1048 0ba0 AFB40000	        sw      $s4, 0($sp)
+1049 0ba4               
+1050 0ba4 34100001	        li      $s0, 1                  #running sum
+1051 0ba8 34110000	        li      $s1, 0                  #index
+1052 0bac               exponent_loop:
+1053 0bac 12240004	        beq     $s1, $a0, exponent_done
+1054 0bb0 02050018	        mul     $s0, $s0, $a1
+     0bb4 00008012
+1055 0bb8 22310001	        addi    $s1, $s1, 1
+1056 0bbc 080002EB	        j       exponent_loop
+1057 0bc0               exponent_done:
+1058 0bc0 02001021	        move    $v0, $s0
+1059 0bc4               
+1060 0bc4 8FB40000	        lw      $s4, 0($sp)
+1061 0bc8 8FB30004	        lw      $s3, 4($sp)
+1062 0bcc 8FB20008	        lw      $s2, 8($sp)
+1063 0bd0 8FB1000C	        lw      $s1, 12($sp)
+1064 0bd4 8FB00010	        lw      $s0, 16($sp)
+1065 0bd8 8FBF0014	        lw      $ra, 20($sp)
+1066 0bdc 23BD0018	        addi    $sp, $sp, 24
+1067 0be0 03E00008	        jr      $ra
+1068 0be4               
+1069 0be4               #a0 - start of a null terminated digit string
+1070 0be4               #v0 - the integer value of that digit string
+1071 0be4               atoi:
+1072 0be4 23BDFFE4	        addi    $sp, $sp, -28
+1073 0be8 AFB50018	        sw      $s5, 24($sp)
+1074 0bec AFBF0014	        sw      $ra, 20($sp)
+1075 0bf0 AFB00010	        sw      $s0, 16($sp)
+1076 0bf4 AFB1000C	        sw      $s1, 12($sp)
+1077 0bf8 AFB20008	        sw      $s2, 8($sp)
+1078 0bfc AFB30004	        sw      $s3, 4($sp)
+1079 0c00 AFB40000	        sw      $s4, 0($sp)
+1080 0c04               
+1081 0c04 34100000	        li      $s0, 0          #counter
+1082 0c08 00808821	        move    $s1, $a0
+1083 0c0c               next_char:
+1084 0c0c 82290000	        lb      $t1, 0($s1)
+1085 0c10 11200003	        beq     $t1, $zero, end_char
+1086 0c14 22310001	        addi    $s1, $s1, 1
+1087 0c18 22100001	        addi    $s0, $s0, 1
+1088 0c1c 08000303	        j       next_char
+1089 0c20               end_char:
+1090 0c20 2210FFFF	        addi    $s0, $s0, -1    #we counted null terminator
+1091 0c24 02009021	        move    $s2, $s0        #number of digits stored in both s2 and s0
+1092 0c28               
+1093 0c28 2210FFFF	        addi    $s0, $s0, -1    #off by one err with this loop approach
+1094 0c2c 34130000	        li      $s3, 0          #current digit place
+1095 0c30 34150000	        li      $s5, 0
+1096 0c34               sum_loop:
+1097 0c34 2408FFFF	        li      $t0, -1
+1098 0c38 1208000F	        beq     $s0, $t0, sum_done
+1099 0c3c               
+1100 0c3c                       #get digit
+1101 0c3c 00908820	        add     $s1, $a0, $s0
+1102 0c40 82310000	        lb      $s1, 0($s1)
+1103 0c44 34080030	        li      $t0, '0'
+1104 0c48 02288822	        sub     $s1, $s1, $t0   #s1 contains integer value of the single digit
+1105 0c4c               
+1106 0c4c                       #convert digit to integer
+1107 0c4c 0080A021	        move    $s4, $a0
+1108 0c50 02602021	        move    $a0, $s3
+1109 0c54 3405000A	        li      $a1, 10
+1110 0c58 0C0002E2	        jal     exponent
+1111 0c5c 02802021	        move    $a0, $s4
+1112 0c60               
+1113 0c60                       #add to running sum
+1114 0c60 00510018	        mul     $t0, $v0, $s1   #t0 contains digit value multiplied by magnitude
+     0c64 00004012
+1115 0c68 02A8A820	        add     $s5, $s5, $t0
+1116 0c6c 2210FFFF	        addi    $s0, $s0, -1
+1117 0c70 22730001	        addi    $s3, $s3, 1
+1118 0c74 0800030D	        j       sum_loop
+1119 0c78               sum_done:
+1120 0c78 02A01021	        move    $v0, $s5
+1121 0c7c               
+1122 0c7c 8FB40000	        lw      $s4, 0($sp)
+1123 0c80 8FB30004	        lw      $s3, 4($sp)
+1124 0c84 8FB20008	        lw      $s2, 8($sp)
+1125 0c88 8FB1000C	        lw      $s1, 12($sp)
+1126 0c8c 8FB00010	        lw      $s0, 16($sp)
+1127 0c90 8FBF0014	        lw      $ra, 20($sp)
+1128 0c94 8FB50018	        lw      $s5, 24($sp)
+1129 0c98 23BD001C	        addi    $sp, $sp, 28
+1130 0c9c 03E00008	        jr      $ra
+1131 0ca0               
+1132 0ca0               
+1133 0ca0               read_done:
+1134 0ca0 8FB40000	        lw      $s4, 0($sp)
+1135 0ca4 8FB30004	        lw      $s3, 4($sp)
+1136 0ca8 8FB20008	        lw      $s2, 8($sp)
+1137 0cac 8FB1000C	        lw      $s1, 12($sp)
+1138 0cb0 8FB00010	        lw      $s0, 16($sp)
+1139 0cb4 8FBF0014	        lw      $ra, 20($sp)
+1140 0cb8 23BD0018	        addi    $sp, $sp, 24
+1141 0cbc 03E00008	        jr      $ra
+1142 0cc0               
+1143 0cc0               done:
+1144 0cc0 8FB40000	        lw      $s4, 0($sp)
+1145 0cc4 8FB30004	        lw      $s3, 4($sp)
+1146 0cc8 8FB20008	        lw      $s2, 8($sp)
+1147 0ccc 8FB1000C	        lw      $s1, 12($sp)
+1148 0cd0 8FB00010	        lw      $s0, 16($sp)
+1149 0cd4 8FBF0014	        lw      $ra, 20($sp)
+1150 0cd8 23BD0018	        addi    $sp, $sp, 24
+1151 0cdc 03E00008	        jr      $ra
+1152 0ce0               
+
+
+        Name           F  Value   M V Sect.                                References
+---------------------  - -------- - - ----- -------------------------------------------------------------------------
+EXIT                     0000000A =         @    10,  233,  398,  436
+MAX_HEAP_SIZE            000003E8 =         @     9,  418
+METADATA_SIZE            00000033 =         @     6,   50
+MIN_HEAP_SIZE            00000004 =         @     8,  414
+NODE_SIZE                0000000C =         @     7,   50,  100,  157,  168,  183,  201,  216,  278,  344,  355,  469
+                                            @   542,  548,  594,  600
+PRINT_CHAR               0000000B =         @     4,  776,  847,  917,  963
+PRINT_INT                00000001 =         @     3,  477,  485,  498,  784,  925,  971, 1022
+PRINT_STRING             00000004 =         @     2,  229,  394,  432,  473,  481,  489,  502,  780,  788,  792,  843
+                                            @   851,  855,  921,  929,  967,  975, 1019, 1025
+READ_STRING              00000008 =         @     5,  699,  707
+a_smaller                00000670 R   text  @   636,  641
+address_msg              0000005A R   data  @    36,  490
+allocated_msg            0000004D R   data  @    34,  482
+atoi                     00000BE4 R   text  @   769,  960, 1012, 1071
+back_merge               000000EC R   text  @   153
+bad_free                 000001D0 R   text  @   141,  148,  228
+bad_free_msg             00000094 R   data  @    42,  230
+best_fit                 00000240 R   text  @   266,  326
+best_fit_done            000002E0 R   text  @   318,  328
+better_fit               000002B0 R   text  @   300,  304,  308
+bf_loop                  00000258 R   text  @   273,  315
+bf_loop_done             000002C4 R   text  @   275,  317
+bf_loop_end              000002BC R   text  @   285,  290,  306,  311,  313
+buffer                   0000078C R   data  @    57,  700,  705,  708,  713,  720,  726,  732,  738,  744,  764,  829
+                                            @   905,  955, 1011
+delta                    00000698 R   text  @   295,  658
+delta_done               000006D8 R   text  @   672,  677,  679
+done                     00000CC0 R   text  @    76, 1143
+double_equals            0000003D R   data  @    28,  922
+end_bracket              00000065 R   data  @    38,  503
+end_char                 00000C20 R   text  @  1085, 1089
+equals                   00000042 R   data  @    30,  968
+exponent                 00000B88 R   text  @  1041, 1110
+exponent_done            00000BC0 R   text  @  1053, 1057
+exponent_loop            00000BAC R   text  @  1052, 1056
+find                     00000024 R   text  @    81,  144
+find_done                00000094 R   text  @   114,  118,  120
+find_loop                00000054 R   text  @    95,  110
+found                    00000084 R   text  @   107,  112
+free                     000000B0 R   text  @   131,  840
+free_done                000001E8 R   text  @   198,  204,  226,  236
+free_message_front       00000037 R   data  @    26,  844
+front_merge              00000170 R   text  @   165,  171,  193,  195
+handle_free              0000089C R   text  @   729,  816
+handle_get               00000998 R   text  @   741,  892
+handle_init              00000B00 R   text  @   702,  997
+handle_malloc            000007C4 R   text  @   723,  751
+handle_print             00000950 R   text  @   735,  868
+handle_set               00000A44 R   text  @   747,  942
+heap                     000000D0 R   data  @    47,  426,  495
+heap_size                00000720 R   data  @    53
+init_allocator           00000394 R   text  @   402, 1016
+init_allocator_done      00000404 R   text  @   429,  439
+init_message_back        0000001F R   data  @    18, 1026
+init_message_front       00000002 R   data  @    16, 1020
+invalid_arena            000003EC R   text  @   416,  420,  431
+invalid_arena_msg        00000068 R   data  @    40,  433
+left_parentheses         00000028 R   data  @    20
+main                     00000000 R G text  @    63,   65
+malloc                   00000208 R   text  @   249,  773
+malloc_done              00000348 R   text  @   338,  371,  373
+malloc_message_middle    0000002C R   data  @    24,  781
+metadata                 000004B8 R   data  @    49,  102,  155,  181,  197,  214,  280,  342,  422,  468,  544,  596
+
+metadata_size            0000071C R   data  @    51,   92,  160,  188,  221,  270,  349,  461,  531,  584
+minimum                  00000644 R   text  @   626
+minimum_done             00000678 R   text  @   639,  643,  645
+negate_delta             000006C8 R   text  @   669,  674
+newline                  00000000 R   data  @    14,  793,  856,  930,  976
+next_4_mult              000002C8 R   text  @   264,  320
+next_char                00000C0C R   text  @  1083, 1088
+no_memory                0000037C R   text  @   331,  393
+no_memory_msg            000000B4 R   data  @    44,  395
+not_found                0000008C R   text  @    97,  116
+parse_free               000008A4 R   text  @   817,  820
+parse_get                000009A0 R   text  @   893,  896
+parse_init               00000B08 R   text  @   998, 1001
+parse_malloc             000007CC R   text  @   752,  755
+parse_print              00000958 R   text  @   869,  872
+parse_set                00000A4C R   text  @   943,  946
+print_done               000004EC R   text  @   466,  509
+print_loop               00000450 R   text  @   464,  507
+print_memory             00000424 R   text  @   451,  881
+read                     000006F8 R   text  @    74,  689
+read_done                00000CA0 R   text  @   716, 1133
+read_loop                00000728 R   text  @   703,  749,  753,  818,  870,  894,  944,  999
+right_parentheses        0000002A R   data  @    22,  789,  852
+shift_left               0000050C R   text  @   185,  218,  521
+shift_left_done          0000058C R   text  @   537,  562
+shift_left_loop          0000053C R   text  @   535,  560
+shift_right              000005AC R   text  @   346,  574
+shift_right_done         00000624 R   text  @   589,  613
+shift_right_loop         000005D8 R   text  @   587,  611
+size_msg                 00000046 R   data  @    32,  474
+split_mem                000002F8 R   text  @   336,  340
+sum_done                 00000C78 R   text  @  1098, 1119
+sum_loop                 00000C34 R   text  @  1096, 1118
+variables                00000724 R   data  @    55,  802,  836,  912,  983

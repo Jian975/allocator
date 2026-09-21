@@ -1,0 +1,114 @@
+Load map
+Module entry point: 0x00400ce4
+
+Module:  allocator.obj
+ Text segment:  3296 bytes, load point 0x00400000
+ Data segment:  2064 bytes, load point 0x10000000
+ Symbols:
+                   Name Section Mode    Value
+          handle_malloc   Text   R   0x004007c4
+                   free   Text   R   0x004000b0
+             back_merge   Text   R   0x004000ec
+           handle_print   Text   R   0x00400950
+             handle_set   Text   R   0x00400a44
+                  found   Text   R   0x00400084
+            handle_free   Text   R   0x0040089c
+                   main   Text   RG  0x00400000
+              next_char   Text   R   0x00400c0c
+     init_message_front   Data   R   0x10000002
+           print_memory   Text   R   0x00400424
+              heap_size   Data   R   0x10000720
+           negate_delta   Text   R   0x004006c8
+          double_equals   Data   R   0x1000003d
+    init_allocator_done   Text   R   0x00400404
+                   atoi   Text   R   0x00400be4
+                   find   Text   R   0x00400024
+            end_bracket   Data   R   0x10000065
+             print_done   Text   R   0x004004ec
+             parse_free   Text   R   0x004008a4
+           minimum_done   Text   R   0x00400678
+                   read   Text   R   0x004006f8
+                bf_loop   Text   R   0x00400258
+          MAX_HEAP_SIZE          A   0x000003e8
+                 equals   Data   R   0x10000042
+          invalid_arena   Text   R   0x004003ec
+          allocated_msg   Data   R   0x1000004d
+             delta_done   Text   R   0x004006d8
+            front_merge   Text   R   0x00400170
+      invalid_arena_msg   Data   R   0x10000068
+          no_memory_msg   Data   R   0x100000b4
+          metadata_size   Data   R   0x1000071c
+              not_found   Text   R   0x0040008c
+      right_parentheses   Data   R   0x1000002a
+              find_loop   Text   R   0x00400054
+              no_memory   Text   R   0x0040037c
+               exponent   Text   R   0x00400b88
+        shift_left_loop   Text   R   0x0040053c
+               sum_done   Text   R   0x00400c78
+               bad_free   Text   R   0x004001d0
+     free_message_front   Data   R   0x10000037
+           bad_free_msg   Data   R   0x10000094
+            next_4_mult   Text   R   0x004002c8
+              split_mem   Text   R   0x004002f8
+              read_done   Text   R   0x00400ca0
+           PRINT_STRING          A   0x00000004
+      init_message_back   Data   R   0x1000001f
+                  delta   Text   R   0x00400698
+          exponent_loop   Text   R   0x00400bac
+                   heap   Data   R   0x100000d0
+  malloc_message_middle   Data   R   0x1000002c
+       shift_right_loop   Text   R   0x004005d8
+                newline   Data   R   0x10000000
+              NODE_SIZE          A   0x0000000c
+       left_parentheses   Data   R   0x10000028
+         init_allocator   Text   R   0x00400394
+                minimum   Text   R   0x00400644
+              variables   Data   R   0x10000724
+               end_char   Text   R   0x00400c20
+           parse_malloc   Text   R   0x004007cc
+                   EXIT          A   0x0000000a
+              find_done   Text   R   0x00400094
+             shift_left   Text   R   0x0040050c
+           bf_loop_done   Text   R   0x004002c4
+        shift_left_done   Text   R   0x0040058c
+             print_loop   Text   R   0x00400450
+               size_msg   Data   R   0x10000046
+             better_fit   Text   R   0x004002b0
+              parse_get   Text   R   0x004009a0
+                 buffer   Data   R   0x1000078c
+            handle_init   Text   R   0x00400b00
+          MIN_HEAP_SIZE          A   0x00000004
+             PRINT_CHAR          A   0x0000000b
+              PRINT_INT          A   0x00000001
+                   done   Text   R   0x00400cc0
+              free_done   Text   R   0x004001e8
+          METADATA_SIZE          A   0x00000033
+                 malloc   Text   R   0x00400208
+            malloc_done   Text   R   0x00400348
+              parse_set   Text   R   0x00400a4c
+          exponent_done   Text   R   0x00400bc0
+            bf_loop_end   Text   R   0x004002bc
+               sum_loop   Text   R   0x00400c34
+            shift_right   Text   R   0x004005ac
+            parse_print   Text   R   0x00400958
+            READ_STRING          A   0x00000008
+             parse_init   Text   R   0x00400b08
+       shift_right_done   Text   R   0x00400624
+          best_fit_done   Text   R   0x004002e0
+             handle_get   Text   R   0x00400998
+            address_msg   Data   R   0x1000005a
+              a_smaller   Text   R   0x00400670
+              read_loop   Text   R   0x00400728
+               best_fit   Text   R   0x00400240
+               metadata   Data   R   0x100004b8
+
+Module:  r2k_startup.obj
+ Text segment:  64 bytes, load point 0x00400ce0
+ Data segment:  8 bytes, load point 0x10000810
+ Symbols:
+                   Name Section Mode    Value
+            __heap_size   Data   RG  0x10000814
+              SYS_EXIT2          A   0x00000011
+               SYS_SBRK          A   0x00000009
+         __r2k__entry__   Text   RG  0x00400ce4
+             __heap_ptr   Data   RG  0x10000810
